@@ -195,4 +195,5 @@ curl -X POST http://localhost:9900/api/chat \
 curl http://localhost:9900/milvus/health
 ```
 
-**版本**: v1.0.0
+**版本**: v2.0.0
+这是自己的学习版本，已经是进行了querry的优化更新，以及召回与重排的更新，后续可能继续进行版本更新，暂定
