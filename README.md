@@ -1,199 +1,86 @@
 # SuperBizAgent
 
-> 基于 Spring Boot + AI Agent 的智能问答与运维系统
+> 基于 LangChain + LangGraph + FastAPI 的多 Agent 智能运维系统
 
-## 📖 项目简介
-
-企业级智能业务代理系统，包含两大核心模块：
-
-### 1. RAG 智能问答
-
-集成 Milvus 向量数据库和阿里云 DashScope，提供基于检索增强生成的智能问答能力，支持多轮对话和流式输出。
-
-### 2. AIOps 智能运维
-
-基于 AI Agent 的自动化运维系统，采用 Planner-Executor-Replanner 架构，实现告警分析、日志查询、智能诊断和报告生成。
-
-## 🚀 核心特性
-
-- ✅ **RAG 问答**: 向量检索 + 多轮对话 + 流式输出
-- ✅ **AIOps 运维**: 智能诊断 + 多 Agent 协作 + 自动报告
-- ✅ **工具集成**: 文档检索、告警查询、日志分析、时间工具
-- ✅ **会话管理**: 上下文维护、历史管理、自动清理
-- ✅ **Web 界面**: 提供测试界面和 RESTful API
-
-## 🛠️ 技术栈
-
-| 技术          | 版本     | 说明          |
-| ----------- | ------ | ----------- |
-| Java        | 17     | 开发语言        |
-| Spring Boot | 3.2.0  | 应用框架        |
-| Spring AI   | -      | AI Agent 框架 |
-| DashScope   | 2.17.0 | 阿里云 AI 服务   |
-| Milvus      | 2.6.10 | 向量数据库       |
-
-## 📦 核心模块
+## 架构亮点
 
 ```
-SuperBizAgent/
-├── src/main/java/org/example/
-│   ├── controller/
-│   │   └── ChatController.java        # 统一接口控制器 ⭐
-│   ├── service/
-│   │   ├── ChatService.java           # 对话服务 ⭐
-│   │   ├── AiOpsService.java          # AIOps 服务 ⭐
-│   │   ├── RagService.java            # RAG 服务
-│   │   └── Vector*.java               # 向量服务
-│   ├── agent/tool/                    # Agent 工具集
-│   │   ├── DateTimeTools.java         # 时间工具
-│   │   ├── InternalDocsTools.java     # 文档检索
-│   │   ├── QueryMetricsTools.java     # 告警查询
-│   │   └── QueryLogsTools.java        # 日志查询
-│   └── config/                        # 配置类
-├── src/main/resources/
-│   ├── static/                        # Web 界面
-│   └── application.yml                # 应用配置
-└── aiops-docs/                        # 运维文档库
+IntentGateway ──→ Supervisor ──→ RAG Agent     (技术问答, 2 tools)
+                      │           SRE Agent     (告警排查, 5 tools)
+                      │
+              零分查询直接拦截 (0 LLM 调用)
+              RAG 检索: BM25 + Milvus COSINE → RRF 融合
+              上下文自动压缩: 6 对 → LLM 摘要
 ```
 
-## 📡 核心接口
+- **Supervisor + 2 Workers** 多 Agent 架构，LangGraph `create_react_agent` 驱动
+- **Agentic RAG**: LLM 自主决定何时检索知识库，非固定管线
+- **混合检索**: BM25 关键词 + 向量相似度 → RRF 融合，**Recall@5 = 1.0, MRR = 0.933**
+- **DeepSeek** 作为 LLM，DashScope 作为嵌入模型，Milvus 作为向量库
+- **5 个 Skills** (`.claude/skills/`): 渐进式披露，按意图匹配注入 system prompt
+- **上下文压缩**: 超过 6 轮对话自动 LLM 摘要，不丢历史
+- **Docker 一键部署**: `make init` 启动全套（Milvus + App + Prometheus）
 
-### 1. 智能问答接口
-
-**流式对话（推荐）**
+## 快速开始
 
 ```bash
-POST /api/chat_stream
-Content-Type: application/json
-
-{
-  "Id": "session-123",
-  "Question": "什么是向量数据库？"
-}
+make init     # 一键启动全部服务
+# 浏览器打开 http://localhost:9900
 ```
-
-支持 SSE 流式输出、自动工具调用、多轮对话。
-
-**普通对话**
 
 ```bash
-POST /api/chat
-Content-Type: application/json
-
-{
-  "Id": "session-123",
-  "Question": "什么是向量数据库？"
-}
+make down     # 停止
+make logs     # 日志
+make check    # 健康检查
 ```
 
-一次性返回完整结果，支持工具调用和多轮对话。
+## 技术栈
 
-### 2. AIOps 智能运维接口
+| 层 | 技术 |
+|---|------|
+| LLM | DeepSeek (deepseek-chat) |
+| 嵌入 | DashScope text-embedding-v4 (1024-dim) |
+| Agent 框架 | LangGraph 0.2+ (`create_react_agent`) |
+| 向量库 | Milvus 2.5, COSINE, IVF_FLAT |
+| 混合检索 | rank-bm25 + Milvus → RRF |
+| Web | FastAPI + SSE 流式 + Static |
+| 存储 | MySQL + Redis (会话 + 缓存) / SQLite (dev) |
+| 部署 | Docker Compose 全容器化 |
+
+## 项目结构
+
+```
+app/
+├── agent/            # Supervisor + RAG Agent + SRE Agent
+├── rag/              # IntentGateway, HybridSearch, MilvusStore
+├── tools/            # Prometheus(mock/real), CLS(mock), Datetime
+├── session/          # SQLite + 上下文压缩
+├── skills/           # .claude/skills/ loader
+├── api/              # chat, aiops, upload, health, session
+└── ingestion/        # chunker → embedder → indexer
+.claude/skills/       # log-analyzer, alert-triage, report-writer 等 5 个
+tests/                # 核心测试 + RAG 评测 (Recall@5=1.0, MRR=0.933)
+```
+
+## 端点
+
+| 端点 | 功能 |
+|------|------|
+| `POST /api/chat` | 问答 (Supervisor → RAG/SRE Agent) |
+| `POST /api/chat_stream` | 流式问答 (SSE) |
+| `POST /api/ai_ops` | AIOps 告警排查 (SSE, 工具调用+报告) |
+| `POST /api/upload` | 上传文档自动向量化 |
+| `GET /milvus/health` | 健康检查 (Milvus+DeepSeek+文档数) |
+| `GET /` | Web 前端 (暗夜模式/拖拽上传/Ctrl+Enter) |
+
+## 面试展示
 
 ```bash
-POST /api/ai_ops
+make init                              # 启动
+curl localhost:9900/milvus/health      # → {"milvus":"ok","deepseek":"ok","vector_count":268}
+curl -X POST localhost:9900/api/chat   # → 完整告警分析报告
+  -H "Content-Type: application/json"
+  -d '{"Question":"CPU使用率过高怎么排查"}'
+docker exec superbizagent poetry run python tests/eval/evaluator.py
+# → Recall@5: 1.0, MRR: 0.933
 ```
-
-自动执行告警分析流程，生成运维报告（SSE 流式输出）。
-
-### 3. 会话管理
-
-- `POST /api/chat/clear` - 清空会话历史
-- `GET /api/chat/session/{sessionId}` - 获取会话信息
-
-### 4. 文件管理
-
-- `POST /api/upload` - 上传文件并自动向量化
-- `GET /milvus/health` - Milvus 健康检查
-
-## ⚙️ 核心配置
-
-### application.yml
-
-```yaml
-server:
-  port: 9900
-
-# Milvus 向量数据库
-milvus:
-  host: localhost
-  port: 19530
-
-# 阿里云 DashScope
-spring:
-  ai:
-    dashscope:
-      api-key: "${DASHSCOPE_API_KEY}" // 环境变量
-
-# RAG 配置
-rag:
-  top-k: 3
-  model: "qwen3-max"
-
-# 文档分片
-document:
-  chunk:
-    max-size: 800
-    overlap: 100
-```
-
-### 环境变量
-
-```bash
-export DASHSCOPE_API_KEY=your-api-key
-```
-
-## 🚀 快速开始
-
-### 1. 环境准备
-
-```bash
-# 设置 API Key
-export DASHSCOPE_API_KEY=your-api-key
-```
-
-### 2. 启动应用
-
-方法一： 手动启动
-
-```bash
-1.先启动向量数据库
-docker compose up -d -f vector-database.yml
-
-2.启动服务
-mvn clean install
-mvn spring-boot:run
-```
-
-方法二：一键启动
-
-```bash
-make init  # 会自动启动向量数据库并上传运维文档到向量库
-```
-
-### 3. 使用示例
-
-**Web 界面**
-
-```
-http://localhost:9900
-```
-
-**命令行**
-
-```bash
-# 上传文档
-curl -X POST http://localhost:9900/api/upload \
-  -F "file=@document.txt"
-
-# 智能问答
-curl -X POST http://localhost:9900/api/chat \
-  -H "Content-Type: application/json" \
-  -d '{"Id":"test","Question":"什么是向量数据库？"}'
-
-# 健康检查
-curl http://localhost:9900/milvus/health
-```
-
-**版本**: v2.0.0
-这是自己的学习版本，已经是进行了querry的优化更新，以及召回与重排的更新，后续可能继续进行版本更新，暂定

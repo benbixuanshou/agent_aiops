@@ -1,0 +1,62 @@
+[
+  {
+    "id": "q001",
+    "query": "CPU 使用率过高怎么排查",
+    "relevant": ["cpu_high_usage.md"],
+    "irrelevant": ["disk_high_usage.md"]
+  },
+  {
+    "id": "q002",
+    "query": "服务不可用了怎么办",
+    "relevant": ["service_unavailable.md"],
+    "irrelevant": ["cpu_high_usage.md"]
+  },
+  {
+    "id": "q003",
+    "query": "磁盘满了怎么清理",
+    "relevant": ["disk_high_usage.md"],
+    "irrelevant": ["slow_response.md"]
+  },
+  {
+    "id": "q004",
+    "query": "内存使用率过高 OOM 了怎么处理",
+    "relevant": ["memory_high_usage.md"],
+    "irrelevant": ["disk_high_usage.md"]
+  },
+  {
+    "id": "q005",
+    "query": "接口响应很慢超过 3 秒",
+    "relevant": ["slow_response.md"],
+    "irrelevant": ["cpu_high_usage.md"]
+  },
+  {
+    "id": "q006",
+    "query": "CPU 92% 告警 payment-service 线程数 245",
+    "relevant": ["cpu_high_usage.md"],
+    "irrelevant": ["disk_high_usage.md"]
+  },
+  {
+    "id": "q007",
+    "query": "JVM 堆内存 3.8GB Full GC 频繁",
+    "relevant": ["memory_high_usage.md"],
+    "irrelevant": ["service_unavailable.md"]
+  },
+  {
+    "id": "q008",
+    "query": "服务 500 错误数据库连接池耗尽",
+    "relevant": ["service_unavailable.md"],
+    "irrelevant": ["slow_response.md"]
+  },
+  {
+    "id": "q009",
+    "query": "MySQL 慢查询全表扫描",
+    "relevant": ["slow_response.md"],
+    "irrelevant": ["cpu_high_usage.md"]
+  },
+  {
+    "id": "q010",
+    "query": "Pod OOMKilled 退出码 137",
+    "relevant": ["memory_high_usage.md"],
+    "irrelevant": ["disk_high_usage.md"]
+  }
+]

@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+.poetry/
+.idea/
+.vscode/
+.git/
+volumes/
+uploads/
+*.log
+server.pid
+data/
