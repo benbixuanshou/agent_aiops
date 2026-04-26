@@ -35,6 +35,7 @@ uploads/
 ### docker
 /volumes
 /server.pid
+data/
 
 ### Environment
 .env
