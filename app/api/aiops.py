@@ -28,6 +28,32 @@ async def run_template(request: Request, template_key: str):
     result = await supervisor.invoke(template["prompt"])
     return {"answer": result}
 
+@router.post("/ai_ops/webhook")
+async def ai_ops_webhook(request: Request):
+    """Prometheus Alertmanager webhook — auto-trigger SRE Agent on alerts"""
+    body = await request.json()
+    alerts = body.get("alerts", [])
+    if not alerts:
+        return {"status": "no_alerts"}
+
+    names = [a.get("labels", {}).get("alertname", a.get("annotations", {}).get("summary", "unknown"))
+             for a in alerts if a.get("status") == "firing"]
+    if not names:
+        return {"status": "no_firing_alerts"}
+
+    task = (
+        f"收到 Prometheus 实时告警: {', '.join(names)}。"
+        f"请立即查询 Prometheus 确认告警详情，查询相关日志，分析根因并给出处理建议。"
+    )
+    supervisor = request.app.state.supervisor
+    result = await supervisor.invoke(task)
+
+    await session_store.store_tool_result(
+        f"webhook_{int(time.time())}", result or "", ttl=30 * 24 * 3600
+    )
+    return {"status": "ok", "alerts": names}
+
+
 SRE_TASK = (
     "你是企业级 SRE，接到了自动化告警排查任务。"
     "请先查询当前活跃的 Prometheus 告警，然后查询相关日志和知识库，"

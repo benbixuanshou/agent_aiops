@@ -190,6 +190,7 @@ POST /api/ai_ops                    Supervisor → SRE Agent → SSE(工具+报�
 GET  /api/ai_ops/templates          任务模板列表
 POST /api/ai_ops/template/{key}    按模板运行 AIOps
 POST /api/upload                    上传文件 → IndexingService → Milvus
+POST /api/ai_ops/webhook            Alertmanager webhook → auto SRE Agent
 GET  /milvus/health                 {milvus, deepseek, vector_count}
 POST /api/chat/clear                清空会话
 GET  /api/chat/session/{id}         会话信息

@@ -69,6 +69,7 @@ tests/                # 核心测试 + RAG 评测 (Recall@5=1.0, MRR=0.933)
 | `POST /api/chat` | 问答 (Supervisor → RAG/SRE Agent) |
 | `POST /api/chat_stream` | 流式问答 (SSE) |
 | `POST /api/ai_ops` | AIOps 告警排查 (SSE, 工具调用+报告) |
+| `POST /api/ai_ops/webhook` | Alertmanager Webhook, 告警自动触发 Agent |
 | `POST /api/upload` | 上传文档自动向量化 |
 | `GET /milvus/health` | 健康检查 (Milvus+DeepSeek+文档数) |
 | `GET /` | Web 前端 (暗夜模式/拖拽上传/Ctrl+Enter) |
