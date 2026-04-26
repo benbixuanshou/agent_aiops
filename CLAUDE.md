@@ -22,7 +22,7 @@ find app tests -name "*.py" -exec python -c "import ast; ast.parse(open('{}').re
 
 ## Prerequisites
 
-- Docker (app + Milvus + Prometheus run in containers)
+- Docker (app + Milvus + MySQL + Redis + Prometheus + Alertmanager run in containers)
 - `.env` with `DEEPSEEK_API_KEY` (chat LLM) and `DASHSCOPE_API_KEY` (embeddings)
 - Prometheus Mock mode is default (`PROMETHEUS_MOCK_ENABLED=true`)
 - For local dev: Python 3.11+, Poetry
@@ -83,6 +83,7 @@ POST /api/ai_ops/template/{k} Run specific template
 POST /api/upload              File → IndexingService → Milvus (207 on index fail)
 GET  /milvus/health           {milvus, deepseek, vector_count}
 POST /api/chat/clear          Clear session
+POST /api/ai_ops/webhook       Alertmanager webhook → auto SRE Agent (no-code trigger)
 GET  /api/chat/session/{id}   Session info
 GET  /                         Static frontend (dark mode, drag-drop, Ctrl+Enter)
 ```

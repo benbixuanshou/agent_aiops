@@ -1,10 +1,12 @@
 FROM python:3.12-slim
 WORKDIR /app
 
-RUN pip install --no-cache-dir "poetry<2.0"
+RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple && \
+    pip install --no-cache-dir "poetry<2.0"
 
 COPY pyproject.toml ./
-RUN poetry install --no-dev --no-root
+RUN poetry source add --priority=default tsinghua https://pypi.tuna.tsinghua.edu.cn/simple || true && \
+    poetry install --no-dev --no-root
 
 COPY . .
 
