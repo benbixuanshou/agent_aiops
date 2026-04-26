@@ -73,14 +73,4 @@ tests/                # 核心测试 + RAG 评测 (Recall@5=1.0, MRR=0.933)
 | `GET /milvus/health` | 健康检查 (Milvus+DeepSeek+文档数) |
 | `GET /` | Web 前端 (暗夜模式/拖拽上传/Ctrl+Enter) |
 
-## 面试展示
 
-```bash
-make init                              # 启动
-curl localhost:9900/milvus/health      # → {"milvus":"ok","deepseek":"ok","vector_count":268}
-curl -X POST localhost:9900/api/chat   # → 完整告警分析报告
-  -H "Content-Type: application/json"
-  -d '{"Question":"CPU使用率过高怎么排查"}'
-docker exec superbizagent poetry run python tests/eval/evaluator.py
-# → Recall@5: 1.0, MRR: 0.933
-```
