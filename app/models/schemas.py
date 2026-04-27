@@ -6,15 +6,13 @@ class ChatRequest(BaseModel):
     Id: Optional[str] = Field(default="", alias="Id")
     Question: str = Field(..., alias="Question")
 
-    class Config:
-        populate_by_name = True
+    model_config = {"populate_by_name": True}
 
 
 class ClearRequest(BaseModel):
     Id: str = Field(..., alias="Id")
 
-    class Config:
-        populate_by_name = True
+    model_config = {"populate_by_name": True}
 
 
 class ChatResponse(BaseModel):

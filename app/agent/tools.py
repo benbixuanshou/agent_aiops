@@ -20,7 +20,3 @@ def gather_sre_tools(include_cls: bool = None) -> list:
     if include_cls:
         tools.extend([query_logs, get_available_log_topics])
     return tools
-
-
-# Backward-compatible alias
-gather_all_tools = gather_sre_tools

@@ -14,16 +14,6 @@ class IntentType(str, Enum):
     TROUBLESHOOTING = "troubleshooting"
     GENERAL_QUESTION = "general_question"
 
-    def get_name(self) -> str:
-        names = {
-            "technical_question": "技术问题",
-            "configuration": "配置问题",
-            "product_inquiry": "产品咨询",
-            "troubleshooting": "故障排查",
-            "general_question": "一般性问题",
-        }
-        return names.get(self.value, "一般性问题")
-
 
 class IntentResult(BaseModel):
     intent: IntentType

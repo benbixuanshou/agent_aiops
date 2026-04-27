@@ -15,7 +15,6 @@ import yaml
 class SkillLoader:
     def __init__(self, skill_dir: str = ".claude/skills"):
         self.skills: dict[str, dict] = {}
-        self._descriptions: list[str] = []
         self._load_all(skill_dir)
 
     def _load_all(self, base_dir: str):
@@ -37,10 +36,8 @@ class SkillLoader:
                 "description": meta.get("description", ""),
                 "allowed_tools": meta.get("allowed-tools", []),
                 "body": body,
-                "refs_dir": skill_dir / "references",
-                "scripts_dir": skill_dir / "scripts",
             }
-            self._descriptions.append(f"- {name}: {meta.get('description', '')}")
+
 
     def _parse_frontmatter(self, text: str) -> tuple[dict, str]:
         if text.startswith("---"):
@@ -70,16 +67,3 @@ class SkillLoader:
 
         scored.sort(key=lambda x: x[0], reverse=True)
         return [self.skills[name] for _, name in scored[:top_k]]
-
-    def inject_skills(self, base_prompt: str, matched: list[dict]) -> str:
-        if not matched:
-            return base_prompt
-
-        blocks = []
-        for s in matched:
-            blocks.append(
-                f"<!-- SKILL: {s['name']} -->\n"
-                f"## 技能指引: {s['name']}\n\n"
-                f"{s['body']}"
-            )
-        return base_prompt + "\n\n---\n\n" + "\n\n---\n\n".join(blocks)

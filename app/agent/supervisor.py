@@ -3,8 +3,6 @@ Supervisor Agent — routes user queries to RAG Agent or SRE Agent.
 Two-tier routing: IntentGateway rules (fast) + LLM fallback (edge cases).
 Injects matched Skills into worker Agent context.
 """
-
-from langgraph.prebuilt import create_react_agent
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from app.rag.intent import IntentGateway, IntentType
@@ -81,7 +79,7 @@ class Supervisor:
                     "block_reply": "我是运维助手，只能回答运维和技术相关的问题。"}
 
         if fast:
-            return {"target": fast, "reason": f"intent gateway (confidence > 0.5)"}
+            return {"target": fast, "reason": f"intent gateway (confidence > 0.15)"}
 
         try:
             response = await self.llm.ainvoke([

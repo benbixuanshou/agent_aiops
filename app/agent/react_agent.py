@@ -140,7 +140,7 @@ def build_sre_agent(llm, tools: list):
     """Build an SRE ReAct Agent for incident response.
 
     Args:
-        llm: The ChatDashScope LLM instance
+        llm: The DeepSeek (ChatOpenAI) LLM instance
         tools: List of @tool-decorated functions
 
     Returns:
@@ -153,5 +153,3 @@ def build_sre_agent(llm, tools: list):
     )
 
 
-# Backward-compatible alias
-build_aiops_agent = build_sre_agent

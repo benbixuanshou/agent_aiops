@@ -85,8 +85,6 @@ async def lifespan(app: FastAPI):
     )
     app.state.sre_agent = build_sre_agent(sre_llm, gather_sre_tools())
 
-    app.state.aiops_agent = app.state.sre_agent
-
     # Supervisor — routes between RAG Agent and SRE Agent
     from app.agent.supervisor import Supervisor
     supervisor_llm = ChatOpenAI(

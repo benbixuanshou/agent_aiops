@@ -34,7 +34,6 @@ class Settings(BaseSettings):
 
     # RAG
     rag_top_k: int = 3
-    rag_enable_multi_query: bool = False
 
     # Document chunking
     chunk_max_size: int = 800
@@ -43,8 +42,6 @@ class Settings(BaseSettings):
     # Intent recognition
     intent_enabled: bool = True
     intent_confidence_threshold: float = 0.05
-    intent_technical_topk: int = 5
-    intent_troubleshooting_topk: int = 4
 
     # Prometheus
     prometheus_base_url: str = "http://localhost:9090"

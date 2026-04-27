@@ -28,6 +28,7 @@ async def test_session_prune():
     max_pairs = settings.session_max_pairs
     for i in range(max_pairs + 2):
         await session.add_message(f"q{i}", f"a{i}")
+    await session.compress_history()
     history = await session.get_history()
     assert len(history) <= max_pairs * 2
 
