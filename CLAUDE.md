@@ -10,6 +10,8 @@ make down / restart    # stop / restart all services
 make logs              # tail app logs
 make status / check    # container status / health check
 make reindex           # re-upload aiops-docs/ to vector DB
+make clean             # remove temp files & stale artifacts
+make help              # list all available make targets
 
 docker compose up -d --build   # alternative to make init
 poetry run uvicorn app.main:app --host 0.0.0.0 --port 9900  # dev (no Docker)
@@ -81,7 +83,7 @@ POST /api/ai_ops              Supervisor → SRE Agent → SSE (tools + report)
 GET  /api/ai_ops/templates    List task templates
 POST /api/ai_ops/template/{k} Run specific template
 POST /api/upload              File → IndexingService → Milvus (207 on index fail)
-GET  /milvus/health           {milvus, deepseek, vector_count}
+GET  /milvus/health           {milvus, deepseek, vector_count, collection}
 POST /api/chat/clear          Clear session
 POST /api/ai_ops/webhook       Alertmanager webhook → auto SRE Agent (no-code trigger)
 GET  /api/chat/session/{id}   Session info
@@ -144,7 +146,7 @@ Supervisor ──→ RAG Agent ────── (tech Q&A, 2 tools)
 ```
 
 **Roadmap phases** (see ARCHITECTURE.md for details):
-- **P0** (current): API auth, rate limiting, error handling, logging, CI/CD
+- **P0** (next — starting now): API auth, rate limiting, error handling, logging, CI/CD
 - **P1**: IM notify, alert aggregation, K8s Events, knowledge deposition, scheduled patrol
 - **P2**: Integration tests 70%+, Alembic migrations, multi-env config, change correlation
 - **P3**: Multi-tenancy, audit, ITSM, SLO, War Room, Runbook engine, plugin marketplace
