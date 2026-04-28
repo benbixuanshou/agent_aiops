@@ -100,7 +100,8 @@ class SessionStore:
     # ═══ SQLite (legacy) ═══
 
     def _init_sqlite(self):
-        with sqlite3.connect(self._db_path) as conn:
+        with sqlite3.connect(self._db_path, timeout=10) as conn:
+            conn.execute("PRAGMA journal_mode=WAL")
             conn.execute("""CREATE TABLE IF NOT EXISTS sessions (
                 session_id TEXT PRIMARY KEY, created_at REAL, updated_at REAL)""")
             conn.execute("""CREATE TABLE IF NOT EXISTS messages (
@@ -119,7 +120,10 @@ class SessionStore:
     async def _get_mysql(self):
         if self._mysql_pool is None:
             import aiomysql
-            self._mysql_pool = await aiomysql.create_pool(**self._mysql_dsn, minsize=1, maxsize=5)
+            self._mysql_pool = await aiomysql.create_pool(
+                **self._mysql_dsn, minsize=1, maxsize=5,
+                pool_recycle=3600, connect_timeout=5,
+            )
             async with self._mysql_pool.acquire() as conn:
                 async with conn.cursor() as cur:
                     await cur.execute("""CREATE TABLE IF NOT EXISTS sessions (

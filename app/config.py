@@ -3,7 +3,7 @@ from pydantic import Field
 
 
 class Settings(BaseSettings):
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
     # Server
     app_env: str = "dev"  # dev / staging / prod
@@ -68,6 +68,10 @@ class Settings(BaseSettings):
 
     # Patrol agent
     patrol_interval_minutes: int = 15  # 0 = disabled
+
+    # Change tracking
+    change_tracking_enabled: bool = True
+    change_tracking_mock: bool = True
 
     # File upload
     upload_path: str = "./uploads"

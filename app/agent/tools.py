@@ -3,6 +3,7 @@
 from app.tools.datetime_tool import get_current_datetime
 from app.tools.prometheus_tool import query_prometheus_alerts
 from app.tools.cls_logs_tool import query_logs, get_available_log_topics
+from app.tools.change_tools import query_recent_deployments
 from app.rag.rag_tool import search_knowledge_base
 from app.config import settings
 
@@ -21,6 +22,7 @@ def gather_sre_tools(include_cls: bool = None) -> list:
         query_prometheus_alerts,
         query_k8s_events,
         get_k8s_namespaces,
+        query_recent_deployments,
     ]
     if include_cls is None:
         include_cls = settings.cls_mock_enabled
