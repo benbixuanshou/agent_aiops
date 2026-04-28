@@ -13,8 +13,15 @@ def gather_rag_tools() -> list:
 
 
 def gather_sre_tools(include_cls: bool = None) -> list:
-    """Tools for SRE Agent: full incident response toolkit."""
-    tools = [get_current_datetime, search_knowledge_base, query_prometheus_alerts]
+    """Tools for SRE Agent: full incident response toolkit (7 tools with K8s)."""
+    from app.tools.k8s_tools import query_k8s_events, get_k8s_namespaces
+    tools = [
+        get_current_datetime,
+        search_knowledge_base,
+        query_prometheus_alerts,
+        query_k8s_events,
+        get_k8s_namespaces,
+    ]
     if include_cls is None:
         include_cls = settings.cls_mock_enabled
     if include_cls:

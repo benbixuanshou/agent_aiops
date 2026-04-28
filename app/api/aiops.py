@@ -20,9 +20,14 @@ router = APIRouter()
 
 @router.get("/ai_ops/templates")
 async def get_templates():
-    from app.agent.task_templates import TASK_TEMPLATES
-    return [{"key": k, "label": v["label"], "icon": v["icon"]}
-            for k, v in TASK_TEMPLATES.items()]
+    from app.agent.task_templates import SEVERITY, TASK_TEMPLATES
+    return [{
+        "key": k,
+        "label": v["label"],
+        "icon": v["icon"],
+        "severity": v.get("severity", ""),
+        "severity_label": SEVERITY.get(v.get("severity", ""), {}).get("label", ""),
+    } for k, v in TASK_TEMPLATES.items()]
 
 
 @router.post("/ai_ops/template/{template_key}")
@@ -62,17 +67,36 @@ async def ai_ops_webhook(request: Request):
     if not names:
         return {"status": "no_firing_alerts"}
 
+    # Aggregate related alerts into incidents
+    from app.agent.alert_aggregator import AlertAggregator
+    aggregator = AlertAggregator(window_seconds=300)
+    incidents = aggregator.aggregate(alerts)
+    incident_info = ""
+    if incidents:
+        top = incidents[0]
+        incident_info = (
+            f"（告警已聚合为 {len(incidents)} 个 Incident，"
+            f"当前最高级别 {top.severity}，影响服务: {', '.join(top.affected_services)}）"
+        )
+
     task = (
-        f"收到 Prometheus 实时告警: {', '.join(names)}。"
-        f"请立即查询 Prometheus 确认告警详情，查询相关日志，分析根因并给出处理建议。"
+        f"收到 Prometheus 实时告警: {', '.join(names)}。{incident_info}"
+        f"请立即查询 Prometheus 确认告警详情，查询 K8s Events 和相关日志，分析根因并给出处理建议。"
     )
     supervisor = request.app.state.supervisor
     result = await supervisor.invoke(task)
 
-    await session_store.store_tool_result(
-        f"webhook_{int(time.time())}", result or "", ttl=30 * 24 * 3600
-    )
-    return {"status": "ok", "alerts": names}
+    cache_key = f"webhook_{int(time.time())}"
+    await session_store.store_tool_result(cache_key, result or "", ttl=30 * 24 * 3600)
+
+    # Notify via IM
+    if settings.notify_enabled:
+        from app.notify.dingtalk import send_dingtalk_markdown
+        title = f"告警排查: {', '.join(names[:3])}"
+        snippet = (result or "")[:4000]
+        await send_dingtalk_markdown(title, f"# {title}\n\n{snippet}")
+
+    return {"status": "ok", "alerts": names, "cache_key": cache_key}
 
 
 SRE_TASK = (

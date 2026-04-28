@@ -64,6 +64,24 @@ class IndexingService:
         # Flush to ensure data is searchable
         self.vector_store.col.flush()
 
+    async def index_text(self, content: str, source: str = "inline"):
+        """Index a text string into Milvus (used for knowledge deposition)."""
+        chunks = self.chunker.chunk(content, source)
+        for chunk in chunks:
+            vector = await self.embedder.embed_query(chunk.content)
+            chunk_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"{source}_{chunk.chunk_index}"))
+            entity = {
+                "id": chunk_id,
+                "content": chunk.content,
+                "vector": vector,
+                "_source": source,
+                "_file_name": source,
+                "chunk_index": chunk.chunk_index,
+                "total_chunks": len(chunks),
+            }
+            self.vector_store.col.insert([entity])
+        self.vector_store.col.flush()
+
     async def _delete_existing(self, source_path: str):
         expr = f'_source == "{source_path}"'
         try:

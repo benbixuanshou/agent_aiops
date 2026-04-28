@@ -119,6 +119,19 @@ async def lifespan(app: FastAPI):
     )
     logger.info("Supervisor + 2 Agents ready (RAG + SRE)")
 
+    # Patrol agent — scheduled health checks
+    from app.agent.agents.patrol_agent import PatrolAgent
+    from app.tools.prometheus_tool import query_prometheus_alerts as patrol_prom
+    from app.tools.k8s_tools import query_k8s_events as patrol_k8s
+    patrol = PatrolAgent(tools={
+        "query_prometheus_alerts": patrol_prom,
+        "query_k8s_events": patrol_k8s,
+    })
+    app.state.patrol = patrol
+    import asyncio as _asyncio2
+    _asyncio2.create_task(patrol.start())
+    logger.info("Patrol agent started (interval=%s min)", settings.patrol_interval_minutes)
+
     yield
 
     # Shutdown
@@ -149,12 +162,13 @@ app.add_middleware(ApiKeyMiddleware)
 app.add_middleware(RateLimitMiddleware)
 
 # Import and include routers
-from app.api import chat, aiops, upload, health, session
+from app.api import chat, aiops, upload, health, session, knowledge
 app.include_router(chat.router, prefix="/api")
 app.include_router(aiops.router, prefix="/api")
 app.include_router(upload.router, prefix="/api")
 app.include_router(health.router)
 app.include_router(session.router, prefix="/api/chat")
+app.include_router(knowledge.router, prefix="/api")
 
 # Mount static files for the web UI (after API routes)
 app.mount("/", StaticFiles(directory="static", html=True), name="static")

@@ -16,6 +16,11 @@ class Settings(BaseSettings):
     rate_limit_default_per_minute: int = 120
     rate_limit_chat_per_minute: int = 30
 
+    # IM notification
+    dingtalk_webhook_url: str = ""
+    dingtalk_secret: str = ""
+    notify_enabled: bool = True
+
     # DashScope API (embedding only, LLM uses DeepSeek)
     dashscope_api_key: str = Field(alias="DASHSCOPE_API_KEY")
 
@@ -57,6 +62,12 @@ class Settings(BaseSettings):
 
     # CLS (Cloud Log Service)
     cls_mock_enabled: bool = False
+
+    # K8s Events
+    k8s_mock_enabled: bool = True
+
+    # Patrol agent
+    patrol_interval_minutes: int = 15  # 0 = disabled
 
     # File upload
     upload_path: str = "./uploads"
