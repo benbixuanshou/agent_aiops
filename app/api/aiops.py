@@ -1,12 +1,19 @@
 import asyncio
+import hashlib
+import hmac
 import json
+import logging
 import time
+import traceback
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
+from app.config import settings
 from app.models.schemas import SseMessage
 from app.session.manager import session_store
+
+logger = logging.getLogger("superbizagent")
 
 router = APIRouter()
 
@@ -28,10 +35,24 @@ async def run_template(request: Request, template_key: str):
     result = await supervisor.invoke(template["prompt"])
     return {"answer": result}
 
+def _verify_webhook_signature(request: Request, body_bytes: bytes):
+    """Verify HMAC-SHA256 signature if webhook_secret is configured."""
+    if not settings.webhook_secret:
+        return
+    sig = request.headers.get("X-Webhook-Signature", "")
+    expected = hmac.new(
+        settings.webhook_secret.encode(), body_bytes, hashlib.sha256
+    ).hexdigest()
+    if not hmac.compare_digest(expected, sig):
+        raise HTTPException(status_code=403, detail="invalid webhook signature")
+
+
 @router.post("/ai_ops/webhook")
 async def ai_ops_webhook(request: Request):
     """Prometheus Alertmanager webhook — auto-trigger SRE Agent on alerts"""
-    body = await request.json()
+    body_bytes = await request.body()
+    _verify_webhook_signature(request, body_bytes)
+    body = json.loads(body_bytes)
     alerts = body.get("alerts", [])
     if not alerts:
         return {"status": "no_alerts"}
@@ -107,7 +128,9 @@ async def ai_ops(request: Request):
                 yield f"event: message\ndata: {json.dumps(warn.model_dump(), ensure_ascii=False)}\n\n"
 
         except Exception as e:
-            err = SseMessage(type="error", data=str(e))
+            logger.error("aiops_stream_error", exc_info=True)
+            detail = traceback.format_exc() if settings.app_env == "dev" else "agent execution failed"
+            err = SseMessage(type="error", data=detail)
             yield f"event: message\ndata: {json.dumps(err.model_dump(), ensure_ascii=False)}\n\n"
 
         done = SseMessage(type="done", data=None)

@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install poetry
+        run: pip install "poetry<2.0"
+
+      - name: Install dependencies
+        run: poetry install --no-root
+
+      - name: Syntax check
+        run: |
+          find app tests -name "*.py" -print0 | \
+            xargs -0 -n1 python -c "import ast; ast.parse(open('$1').read())"
+
+      - name: Run tests
+        run: poetry run pytest tests/test_core.py tests/test_intent.py tests/test_session.py tests/test_imports.py -v

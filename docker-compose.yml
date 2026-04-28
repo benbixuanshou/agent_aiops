@@ -91,6 +91,12 @@ services:
       - ./aiops-docs:/app/aiops-docs
       - ./data:/app/data
       - ./uploads:/app/uploads
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9900/milvus/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     depends_on:
       standalone:
         condition: service_healthy

@@ -9,6 +9,7 @@ Architecture:
 
 import asyncio
 import json
+import logging
 import sqlite3
 import time
 import uuid
@@ -16,6 +17,8 @@ from pathlib import Path
 from typing import Optional
 
 from app.config import settings
+
+logger = logging.getLogger("superbizagent")
 
 
 class Session:
@@ -54,7 +57,7 @@ class Session:
                 )
                 self.history.insert(0, {"role": "system", "content": f"[前情摘要] {summary}"})
             except Exception:
-                pass
+                logger.warning("compress_history: summarization failed, keeping raw history")
 
     async def get_history(self) -> list[dict]:
         async with self._lock:
@@ -175,7 +178,7 @@ class SessionStore:
                              (session_id, time.time(), time.time()))
                 conn.commit()
         except Exception:
-            pass
+            logger.warning("_persist_sqlite_session failed for %s", session_id)
 
     async def _persist_mysql_session(self, session_id: str):
         try:
@@ -186,7 +189,7 @@ class SessionStore:
                         "INSERT INTO sessions VALUES (%s, %s, %s) ON DUPLICATE KEY UPDATE updated_at=%s",
                         (session_id, time.time(), time.time(), time.time()))
         except Exception:
-            pass
+            logger.warning("_persist_mysql_session failed for %s", session_id)
 
     async def clear(self, session_id: str):
         session = self._sessions.get(session_id)
@@ -219,7 +222,7 @@ class SessionStore:
                 await redis.setex(f"tool:{cache_key}", ttl, result[:50000])
                 return
             except Exception:
-                pass
+                logger.warning("store_tool_result: redis failed for %s", cache_key)
         if self.backend == "sqlite":
             try:
                 with sqlite3.connect(self._db_path) as conn:
@@ -227,7 +230,7 @@ class SessionStore:
                                  (cache_key, result, time.time(), ttl))
                     conn.commit()
             except Exception:
-                pass
+                logger.warning("store_tool_result: sqlite failed for %s", cache_key)
         elif self.backend == "mysql":
             try:
                 pool = await self._get_mysql()
@@ -237,7 +240,7 @@ class SessionStore:
                             "REPLACE INTO tool_cache VALUES (%s, %s, %s, %s)",
                             (cache_key, result, time.time(), ttl))
             except Exception:
-                pass
+                logger.warning("store_tool_result: mysql failed for %s", cache_key)
 
     async def get_tool_result(self, cache_key: str) -> Optional[str]:
         redis = await self._get_redis()
@@ -247,7 +250,7 @@ class SessionStore:
                 if val:
                     return val
             except Exception:
-                pass
+                logger.warning("get_tool_result: redis failed for %s", cache_key)
         if self.backend == "sqlite":
             try:
                 with sqlite3.connect(self._db_path) as conn:
@@ -256,7 +259,7 @@ class SessionStore:
                     if row and (time.time() - row[1]) < row[2]:
                         return row[0]
             except Exception:
-                pass
+                logger.warning("get_tool_result: sqlite failed for %s", cache_key)
         elif self.backend == "mysql":
             try:
                 pool = await self._get_mysql()
@@ -268,7 +271,7 @@ class SessionStore:
                         if row and (time.time() - row[0][1]) < row[0][2]:
                             return row[0][0]
             except Exception:
-                pass
+                logger.warning("get_tool_result: mysql failed for %s", cache_key)
         return None
 
 

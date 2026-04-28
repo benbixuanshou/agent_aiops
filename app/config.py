@@ -6,8 +6,15 @@ class Settings(BaseSettings):
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
     # Server
+    app_env: str = "dev"  # dev / staging / prod
     host: str = "0.0.0.0"
     port: int = 9900
+
+    # Security
+    api_keys: str = ""  # comma-separated, empty = no auth (dev)
+    webhook_secret: str = ""  # HMAC secret for Alertmanager webhook
+    rate_limit_default_per_minute: int = 120
+    rate_limit_chat_per_minute: int = 30
 
     # DashScope API (embedding only, LLM uses DeepSeek)
     dashscope_api_key: str = Field(alias="DASHSCOPE_API_KEY")

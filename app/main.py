@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -9,11 +10,28 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
+
+def _setup_logging():
+    if settings.app_env == "dev":
+        fmt = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+        logging.basicConfig(level=logging.INFO, format=fmt, datefmt="%Y-%m-%d %H:%M:%S")
+    else:
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(logging.Formatter(
+            '{"ts":"%(asctime)s","level":"%(levelname)s","logger":"%(name)s",'
+            '"msg":"%(message)s"}',
+            datefmt="%Y-%m-%dT%H:%M:%S",
+        ))
+        root = logging.getLogger()
+        root.setLevel(logging.INFO)
+        root.handlers = [handler]
+
+    # Silence noisy third-party loggers
+    for noisy in ("httpx", "httpcore", "urllib3", "pymilvus", "aiomysql"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
+
+
+_setup_logging()
 logger = logging.getLogger("superbizagent")
 
 
@@ -23,7 +41,7 @@ async def _ensure_docs_indexed(vector_store, embedder):
         if vector_store.col.num_entities > 0:
             return
     except Exception:
-        pass
+        logger.warning("auto_ingestion: could not check vector count, skipping")
 
     docs_dir = Path("aiops-docs")
     if not docs_dir.is_dir():
@@ -35,7 +53,7 @@ async def _ensure_docs_indexed(vector_store, embedder):
         try:
             await indexer.index_file(str(md_file))
         except Exception:
-            pass
+            logger.warning("auto_ingestion: failed to index %s", md_file.name)
 
 
 @asynccontextmanager
@@ -107,7 +125,7 @@ async def lifespan(app: FastAPI):
     try:
         vector_store.close()
     except Exception:
-        pass
+        logger.warning("shutdown: vector_store.close() failed")
 
 
 app = FastAPI(title="SuperBizAgent", version="1.0.0", lifespan=lifespan)
@@ -119,6 +137,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# P0 middleware (ordered: outermost first)
+from app.middleware.error_handler import ErrorHandlerMiddleware
+from app.middleware.logging import LoggingMiddleware
+from app.middleware.auth import ApiKeyMiddleware
+from app.middleware.rate_limit import RateLimitMiddleware
+app.add_middleware(ErrorHandlerMiddleware)
+app.add_middleware(LoggingMiddleware)
+app.add_middleware(ApiKeyMiddleware)
+app.add_middleware(RateLimitMiddleware)
 
 # Import and include routers
 from app.api import chat, aiops, upload, health, session
