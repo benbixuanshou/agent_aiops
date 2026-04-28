@@ -54,7 +54,7 @@ POST /api/chat ──→ IntentGateway ──→ Supervisor ──→ RAG Agent 
 - **IntentGateway** (`rag/intent.py`): Rule-based keyword(0.6)+pattern(0.4), blocks queries with zero keyword matches. Threshold 0.05. 15 troubleshooting keywords.
 - **HybridRetriever** (`rag/hybrid_search.py`): BM25 (rank-bm25) + Milvus COSINE → RRF fusion. Wired into `rag_tool.py`.
 - **SessionStore** (`session/manager.py`): MySQL (Docker) / SQLite (dev) backends. Redis for tool cache (hot path, 5min TTL). Auto-compresses old conversations to summaries via LLM after 6 pairs. 7-day TTL cleanup.
-- **SkillLoader** (`skills/loader.py`): Scans `.claude/skills/*/SKILL.md`, matches by keyword overlap, injects into SRE Agent system prompt.
+- **SkillLoader** (`skills/loader.py`): Scans `.claude/skills/*/SKILL.md`, matches by keyword overlap, injects into SRE Agent system prompt. 8 skills installed (5 ops + 3 garden-skills).
 - **Task Templates** (`agent/task_templates.py`): 4 pre-built prompts (CPU/memory/slow/service-down). Exposed at `/api/ai_ops/templates`, frontend buttons at top-right.
 - **Logging**: Python `logging` module, format: `YYYY-MM-DD HH:MM:SS [LEVEL] superbizagent: message`.
 
@@ -117,14 +117,37 @@ app/
 ├── tools/                     # datetime, prometheus (mock/real), cls_logs (mock)
 ├── ingestion/                 # chunker → embedder (DashScope) → indexer
 ├── session/manager.py         # MySQL/Redis/SQLite + asyncio.Lock + context compression
-├── skills/loader.py           # .claude/skills/ loader
+├── skills/loader.py           # .claude/skills/ loader (8 skills)
 ├── api/                       # chat, aiops, upload, health, session
 └── models/schemas.py
 tests/
 ├── test_core.py               # 10 core tests (intent 6 + session 3 + health 1)
+├── test_intent.py             # intent classification tests
+├── test_session.py            # session lifecycle tests
+├── test_imports.py            # module import verification
 └── eval/                      # 10 annotated queries + evaluator (Recall@5, MRR)
-.claude/skills/                # log-analyzer, alert-triage
+.claude/skills/                # 8 skills: alert-triage, log-analyzer, report-writer, sql-tuning,
+                              #   capacity-planning, rag-skill, gpt-image-2, web-design-engineer
 ```
+
+### Target Architecture (v2.0 Roadmap)
+
+Goal: Split monolithic SRE Agent into Supervisor + 5 domain Agents to avoid tool overload:
+
+```
+Supervisor ──→ RAG Agent ────── (tech Q&A, 2 tools)
+           ├─→ SRE Agent ────── (alert triage, 5 tools)
+           ├─→ Platform Agent ── (K8s/DB/infra, 6-8 tools)
+           ├─→ Patrol Agent ─── (scheduled health checks)
+           ├─→ Action Agent ─── (controlled auto-remediation, human-confirmed)
+           └─→ Notify Agent ─── (DingTalk/WeCom push)
+```
+
+**Roadmap phases** (see ARCHITECTURE.md for details):
+- **P0** (current): API auth, rate limiting, error handling, logging, CI/CD
+- **P1**: IM notify, alert aggregation, K8s Events, knowledge deposition, scheduled patrol
+- **P2**: Integration tests 70%+, Alembic migrations, multi-env config, change correlation
+- **P3**: Multi-tenancy, audit, ITSM, SLO, War Room, Runbook engine, plugin marketplace
 
 ### Key Decisions
 
@@ -134,3 +157,4 @@ tests/
 - **No RAGPipeline** — chat always goes through Supervisor → Agent.
 - **IntentGateway blocks zero-score only** — single keyword match passes through.
 - **Prometheus Mock is default**— real Prometheus available in docker-compose.
+- **Skills are `.claude/skills/<name>/SKILL.md` files** — progressive disclosure, keyword-matched and injected into system prompt.
