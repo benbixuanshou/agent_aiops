@@ -9,8 +9,9 @@ from app.config import settings
 
 
 def gather_rag_tools() -> list:
-    """Tools for RAG Agent: knowledge search + datetime."""
-    return [search_knowledge_base, get_current_datetime]
+    """Tools for RAG Agent: knowledge search + web search + datetime."""
+    from app.tools.web_search_tool import web_search
+    return [search_knowledge_base, get_current_datetime, web_search]
 
 
 def gather_sre_tools(include_cls: bool = None) -> list:
