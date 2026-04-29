@@ -85,7 +85,8 @@ services:
       - MYSQL_DATABASE=superbiz
       - REDIS_URL=redis://redis:6379/0
       - SESSION_BACKEND=mysql
-      - PROMETHEUS_MOCK_ENABLED=true
+      - PROMETHEUS_MOCK_ENABLED=false
+      - PROMETHEUS_BASE_URL=http://prometheus:9090
       - CLS_MOCK_ENABLED=true
     volumes:
       - ./aiops-docs:/app/aiops-docs

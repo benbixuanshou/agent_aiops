@@ -11,7 +11,7 @@
 
 | # | 任务 | 说明 | 文件 |
 |---|---|---|---|
-| A1 | 真实 Prometheus API | 替换 mock，httpx 直连 Prometheus API | `tools/prometheus_tool.py` |
+| A1 | 真实 Prometheus API | ✅ done — 关闭 MOCK，直连 Docker Prometheus:9090 | 2026-04-29 |
 | A2 | 真实 K8s API | 用 `kubernetes` Python client 查 Pod Events | `tools/k8s_tools.py` |
 | A3 | 真实日志系统 | 对接 ELK/Loki/CLS 真实日志查询 | `tools/cls_logs_tool.py` |
 | A4 | 真实变更系统 | 对接 Jenkins/GitLab CI/ArgoCD 发布记录 | `tools/change_tools.py` |
