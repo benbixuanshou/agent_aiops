@@ -354,6 +354,7 @@ document.querySelectorAll('.sidebar-item[data-tab]').forEach(btn => {
         window.__SBA.currentTab = tab;
         if (tab === 'admin') loadAdminStats();
         if (tab === 'knowledge') refreshStatus();
+        if (tab === 'dashboard') refreshDashboard();
     });
 });
 
