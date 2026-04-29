@@ -408,7 +408,70 @@ function renderMarkdown(text) {
 function showLoading() { document.getElementById('loadingOverlay').style.display = 'flex'; }
 function hideLoading() { document.getElementById('loadingOverlay').style.display = 'none'; }
 
+// ── Chat History ──
+function getHistoryKey() { return 'sbz_chats_' + (window.__SBA.tenantName || 'default'); }
+function loadHistories() {
+    try { return JSON.parse(localStorage.getItem(getHistoryKey()) || '{}'); }
+    catch(e) { return {}; }
+}
+function saveHistories(h) { localStorage.setItem(getHistoryKey(), JSON.stringify(h)); }
+function saveCurrentChat() {
+    const msgs = document.getElementById('chatMessages');
+    const messages = msgs.querySelectorAll('.chat-message');
+    if (messages.length === 0) return;
+    const history = [];
+    messages.forEach(m => {
+        if (m.classList.contains('user')) history.push({role:'user', content: m.textContent.trim()});
+        else history.push({role:'assistant', content: m.querySelector('.msg-bubble')?.innerHTML || m.textContent});
+    });
+    const all = loadHistories();
+    all[window.__SBA.sessionId] = { id: window.__SBA.sessionId, title: getChatTitle(history), messages: history, time: Date.now() };
+    saveHistories(all);
+}
+function getChatTitle(history) {
+    const firstUser = history.find(h => h.role === 'user');
+    return firstUser ? (firstUser.content || '').slice(0, 30) : '新对话';
+}
+function renderHistoryList() {
+    const list = document.getElementById('chatHistoryList');
+    const all = loadHistories();
+    const sorted = Object.values(all).sort((a,b) => b.time - a.time).slice(0, 20);
+    list.innerHTML = sorted.map(h => `
+        <div class="history-item" data-sid="${h.id}">
+            <span class="history-item-title">${escapeHtml(h.title)}</span>
+            <span class="history-item-time">${timeAgo(h.time)}</span>
+        </div>
+    `).join('');
+    list.querySelectorAll('.history-item').forEach(el => {
+        el.addEventListener('click', () => loadChatHistory(el.dataset.sid));
+    });
+}
+function loadChatHistory(sid) {
+    const all = loadHistories();
+    const h = all[sid];
+    if (!h) return;
+    saveCurrentChat(); // save current before switching
+    window.__SBA.sessionId = sid;
+    const msgs = document.getElementById('chatMessages');
+    msgs.innerHTML = '';
+    document.getElementById('welcomeGreeting').style.display = 'none';
+    h.messages.forEach(m => addChatMessage(m.role, m.content));
+    // switch to chat tab
+    document.querySelectorAll('.sidebar-item').forEach(b => b.classList.remove('active'));
+    document.querySelector('.sidebar-item[data-tab="chat"]').classList.add('active');
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('tab-chat').classList.add('active');
+}
+function timeAgo(ts) {
+    const s = Math.floor((Date.now() - ts)/1000);
+    if (s < 60) return '刚刚';
+    if (s < 3600) return Math.floor(s/60)+'分钟前';
+    if (s < 86400) return Math.floor(s/3600)+'小时前';
+    return Math.floor(s/86400)+'天前';
+}
+
 // ── Init ──
+renderHistoryList();
 document.getElementById('sendButton').addEventListener('click', sendMessage);
 document.getElementById('messageInput').addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
@@ -428,12 +491,21 @@ document.getElementById('fileInput').addEventListener('change', async (e) => {
     } catch(e) { hideLoading(); }
 });
 document.getElementById('newChatBtn').addEventListener('click', () => {
+    saveCurrentChat();
     window.__SBA.sessionId = 's' + Date.now().toString(36);
     document.getElementById('chatMessages').innerHTML = '';
     document.getElementById('welcomeGreeting').style.display = '';
+    renderHistoryList();
 });
 document.getElementById('uploadFileBtnV2')?.addEventListener('click', () => document.getElementById('fileInput').click());
 document.getElementById('refreshKbBtn')?.addEventListener('click', refreshStatus);
+
+// Auto-save after each assistant reply
+const origAddChatMessage = addChatMessage;
+addChatMessage = function(role, content) {
+    origAddChatMessage(role, content);
+    if (role === 'assistant') { saveCurrentChat(); renderHistoryList(); }
+};
 </script>
 </body>
 </html>
