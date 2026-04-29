@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Runbook Editor — SuperBizAgent</title>
+<style>
+:root{--bg:#080b10;--surface:#0d1117;--elevated:#141b24;--border:#1a2332;--accent:#2dd4bf;--p0:#f43f5e;--p1:#f59e0b;--p2:#38bdf8;--text:#e0e4eb;--sub:#7c88a0;--dim:#3d495c;--font:'IBM Plex Sans',system-ui,sans-serif;--mono:'JetBrains Mono',monospace;--radius:10px;--t:180ms cubic-bezier(.4,0,.2,1)}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--text);font-size:14px}
+body{display:flex;flex-direction:column}
+.header{display:flex;align-items:center;justify-content:space-between;padding:12px 24px;background:var(--surface);border-bottom:1px solid var(--border)}
+.header h1{font-size:16px;font-weight:600}
+.header-btn{padding:8px 16px;border-radius:6px;border:1px solid var(--accent);background:rgba(45,212,191,.1);color:var(--accent);cursor:pointer;font-size:13px;font-weight:500;transition:all var(--t)}
+.header-btn:hover{background:rgba(45,212,191,.2)}
+.main{display:flex;flex:1;overflow:hidden}
+.palette{width:240px;background:var(--surface);border-right:1px solid var(--border);padding:16px;overflow-y:auto}
+.palette h3{font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:14px}
+.node-drag{padding:12px 14px;border-radius:var(--radius);border:1px solid var(--border);margin-bottom:8px;cursor:grab;font-size:13px;font-weight:500;transition:all var(--t);display:flex;align-items:center;gap:10px}
+.node-drag:hover{border-color:var(--accent);background:rgba(45,212,191,.05)}
+.node-drag svg{width:18px;height:18px;opacity:.5;flex-shrink:0}
+.canvas{flex:1;padding:24px;overflow-y:auto;background:var(--bg)}
+.canvas-empty{display:flex;align-items:center;justify-content:center;height:100%;color:var(--dim);font-size:14px;flex-direction:column;gap:12px}
+.step-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;margin-bottom:12px;display:flex;align-items:center;gap:14px;transition:all var(--t);max-width:600px}
+.step-card:hover{border-color:var(--border)}
+.step-number{width:28px;height:28px;border-radius:50%;background:var(--accent);color:var(--bg);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0}
+.step-info{flex:1}
+.step-name{font-weight:600;margin-bottom:4px}
+.step-detail{font-size:12px;color:var(--sub)}
+.step-remove{background:none;border:none;color:var(--dim);cursor:pointer;font-size:18px;padding:4px;border-radius:4px;transition:all var(--t)}
+.step-remove:hover{color:var(--p0);background:rgba(244,63,94,.1)}
+.preview{width:380px;background:var(--surface);border-left:1px solid var(--border);padding:16px;overflow-y:auto}
+.preview h3{font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:14px}
+.preview-code{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:14px;font-family:var(--mono);font-size:12px;color:var(--sub);white-space:pre-wrap;line-height:1.7}
+.connector{width:2px;height:16px;background:var(--border);margin-left:14px}
+</style>
+</head>
+<body>
+<div class="header">
+    <h1>Runbook Editor</h1>
+    <div style="display:flex;gap:10px">
+        <button class="header-btn" onclick="exportYAML()">导出 YAML</button>
+        <button class="header-btn" onclick="clearAll()">清空</button>
+    </div>
+</div>
+<div class="main">
+    <div class="palette">
+        <h3>节点类型（拖放到画布）</h3>
+        <div class="node-drag" draggable="true" data-type="tool_call" ondragstart="dragStart(event)">
+            <svg viewBox="0 0 24 24" fill="none"><rect x="2" y="2" width="20" height="20" rx="3" stroke="currentColor" stroke-width="1.5"/><path d="M7 12h10M12 7v10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            Tool Call — 调用工具
+        </div>
+        <div class="node-drag" draggable="true" data-type="llm_think" ondragstart="dragStart(event)">
+            <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5"/><path d="M8 12h8M12 8v8" stroke="currentColor" stroke-width="1" opacity="0.3"/></svg>
+            LLM Think — 分析推理
+        </div>
+        <div class="node-drag" draggable="true" data-type="human_approval" ondragstart="dragStart(event)">
+            <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.5"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            Human Approval — 人工确认
+        </div>
+        <div class="node-drag" draggable="true" data-type="notify" ondragstart="dragStart(event)">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            Notify — 推送通知
+        </div>
+    </div>
+    <div class="canvas" id="canvas" ondragover="dragOver(event)" ondrop="drop(event)">
+        <div class="canvas-empty" id="empty">拖放节点到这里开始编排 Runbook</div>
+    </div>
+    <div class="preview">
+        <h3>实时预览</h3>
+        <div class="preview-code" id="preview"></div>
+    </div>
+</div>
+<script>
+let steps=[],dragType=null;
+function dragStart(e){dragType=e.target.dataset.type}
+function dragOver(e){e.preventDefault()}
+function drop(e){e.preventDefault();if(!dragType)return;addStep(dragType);dragType=null;render()}
+function addStep(type){
+    const names={tool_call:'查询 Prometheus 告警',llm_think:'分析告警信息',human_approval:'确认执行操作',notify:'推送排查结果'};
+    steps.push({type,name:names[type]||type,config:{}});
+}
+function removeStep(i){steps.splice(i,1);render()}
+function clearAll(){steps=[];render()}
+function render(){
+    const c=document.getElementById('canvas'),e=document.getElementById('empty');
+    if(steps.length===0){c.innerHTML='';c.appendChild(e);document.getElementById('preview').textContent='# 空 Runbook\n# 拖放节点到画布开始编排';return}
+    let h='';
+    steps.forEach((s,i)=>{
+        const icons={tool_call:'[Tool]',llm_think:'[Think]',human_approval:'[Wait]',notify:'[Push]'};
+        h+=(i>0?'<div class="connector"></div>':'')+
+        `<div class="step-card">
+            <div class="step-number">${i+1}</div>
+            <div class="step-info">
+                <div class="step-name">${icons[s.type]||''} ${s.name}</div>
+                <div class="step-detail">type: ${s.type}</div>
+            </div>
+            <button class="step-remove" onclick="removeStep(${i})">×</button>
+        </div>`;
+    });
+    c.innerHTML=h;
+    updatePreview();
+}
+function updatePreview(){
+    const y={name:'My Runbook',version:'1.0',severity:'P1',description:'',steps:steps.map(s=>({type:s.type,name:s.name,config:{}}))};
+    document.getElementById('preview').textContent=jsyaml(y);
+}
+function jsyaml(obj,indent=0){
+    const pad='  '.repeat(indent);
+    if(Array.isArray(obj))return obj.map(v=>pad+'- '+jsyaml(v,indent+1).trimStart()).join('\n');
+    if(typeof obj==='object'&&obj!==null){
+        return Object.entries(obj).map(([k,v])=>{
+            if(v===null||v===undefined)return pad+k+':';
+            if(typeof v==='object'&&Object.keys(v).length===0)return pad+k+': {}';
+            if(typeof v==='object')return pad+k+':\n'+jsyaml(v,indent+1);
+            return pad+k+': '+v;
+        }).join('\n');
+    }
+    return String(obj);
+}
+function exportYAML(){
+    if(steps.length===0)return;
+    const name=prompt('Runbook 名称','my-runbook');
+    if(!name)return;
+    const y={name,version:'1.0',severity:'P1',description:'',steps:steps.map(s=>({type:s.type,name:s.name,config:{}}))};
+    const blob=new Blob([jsyaml(y)],{type:'text/yaml'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name+'.yml';a.click();
+}
+</script>
+</body>
+</html>

@@ -68,9 +68,13 @@ def search_knowledge_base(query: str, top_k: int = None) -> str:
 
     results = []
     for d in docs:
+        cluster = d.metadata.get("_cluster", "")
+        source = d.metadata.get("title") or d.metadata.get("_file_name", "unknown")
+        if cluster and cluster != "default":
+            source = f"[{cluster}] {source}"
         results.append({
             "content": d.page_content,
-            "source": d.metadata.get("title") or d.metadata.get("_file_name", "unknown"),
+            "source": source,
             "score": d.metadata.get("score", 0.0),
         })
 

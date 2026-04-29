@@ -72,6 +72,9 @@ class Settings(BaseSettings):
     # Patrol agent
     patrol_interval_minutes: int = 15  # 0 = disabled
 
+    # Knowledge sync
+    knowledge_cluster_tag: str = "default"  # cluster label for cross-cluster knowledge discovery
+
     # Change tracking
     change_tracking_enabled: bool = True
     change_tracking_mock: bool = True

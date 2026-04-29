@@ -52,6 +52,7 @@ class IndexingService:
                 "_file_name": os.path.basename(normalized_path),
                 "chunk_index": chunk.chunk_index,
                 "total_chunks": len(chunks),
+                "_cluster": settings.knowledge_cluster_tag,
             }
             if chunk.metadata.get("title"):
                 metadata["title"] = chunk.metadata["title"]
@@ -76,6 +77,7 @@ class IndexingService:
                 "vector": vector,
                 "_source": source,
                 "_file_name": source,
+                "_cluster": settings.knowledge_cluster_tag,
                 "chunk_index": chunk.chunk_index,
                 "total_chunks": len(chunks),
             }

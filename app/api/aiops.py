@@ -101,11 +101,19 @@ async def ai_ops_webhook(request: Request):
     cache_key = f"webhook_{int(time.time())}"
     await session_store.store_tool_result(cache_key, result or "", ttl=30 * 24 * 3600)
 
+    # Auto-suggest knowledge deposition if the answer is substantial
+    auto_suggest = ""
+    if result and len(result) > 500:
+        auto_suggest = (
+            "\n\n---\n💡 该排查结果较长且包含有价值的分析，"
+            f"建议确认后入库。使用 cache_key `{cache_key}` 调用 /api/knowledge/confirm。"
+        )
+
     # Notify via IM
     if settings.notify_enabled:
         from app.notify.dingtalk import send_dingtalk_markdown
         title = f"告警排查: {', '.join(names[:3])}"
-        snippet = (result or "")[:4000]
+        snippet = (result or "")[:4000] + auto_suggest
         await send_dingtalk_markdown(title, f"# {title}\n\n{snippet}")
 
     return {"status": "ok", "alerts": names, "cache_key": cache_key}
