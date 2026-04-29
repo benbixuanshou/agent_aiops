@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     # IM notification
     dingtalk_webhook_url: str = ""
     dingtalk_secret: str = ""
+    feishu_webhook_url: str = ""
+    feishu_secret: str = ""
+    wecom_webhook_url: str = ""
     notify_enabled: bool = True
 
     # DashScope API (embedding only, LLM uses DeepSeek)

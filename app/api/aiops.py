@@ -67,6 +67,18 @@ async def ai_ops_webhook(request: Request):
     if not names:
         return {"status": "no_firing_alerts"}
 
+    # Suppress noise (maintenance windows, cascades, duplicates)
+    from app.agent.alert_suppressor import alert_suppressor
+    firing = [a for a in alerts if a.get("status") == "firing"]
+    suppressed = []
+    for a in firing:
+        reason = alert_suppressor.should_suppress(a, firing)
+        if reason:
+            suppressed.append({"alert": a.get("labels", {}).get("alertname", ""), "reason": reason})
+            logger.info("alert_suppressed: %s — %s", a.get("labels", {}).get("alertname"), reason)
+    # Remove suppressed alerts
+    alerts = [a for a in alerts if a not in [s["alert"] for s in suppressed]]
+
     # Aggregate related alerts into incidents
     from app.agent.alert_aggregator import AlertAggregator
     aggregator = AlertAggregator(window_seconds=300)

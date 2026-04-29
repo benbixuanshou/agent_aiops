@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SuperBizAgent — 运维大盘</title>
+<style>
+:root {
+    --bg: #0a0e14; --surface: #11161e; --elevated: #181e28;
+    --border: #1e293b; --accent: #39d4c4; --p0: #ff4d6a; --p1: #ffb347; --p2: #4fc3f7;
+    --text: #e2e6ed; --sub: #7c879c; --dim: #4a5568;
+    --font: 'IBM Plex Sans', system-ui, sans-serif; --mono: 'JetBrains Mono', monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;font-family:var(--font);background:var(--bg);color:var(--text);font-size:14px}
+.header{display:flex;align-items:center;justify-content:space-between;padding:12px 24px;background:var(--surface);border-bottom:1px solid var(--border)}
+.header h1{font-size:18px;font-weight:600}
+.header-right{display:flex;gap:16px;align-items:center;font-size:12px;color:var(--sub)}
+.status-dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:6px}
+.status-dot.ok{background:#7bc67e;box-shadow:0 0 6px rgba(123,198,126,.4)}
+.status-dot.degraded{background:var(--p1)}
+.main{display:grid;grid-template-columns:1fr 1fr 1fr;grid-template-rows:auto 1fr;gap:16px;padding:24px;height:calc(100vh - 57px);overflow:auto}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;overflow:hidden}
+.card-header{font-size:13px;color:var(--sub);text-transform:uppercase;letter-spacing:1px;margin-bottom:16px;font-weight:600}
+.metric-row{display:flex;gap:16px;flex-wrap:wrap}
+.metric{border:1px solid var(--border);border-radius:8px;padding:16px;flex:1;min-width:120px;text-align:center;background:var(--elevated)}
+.metric-value{font-size:28px;font-weight:600;font-family:var(--mono)}
+.metric-label{font-size:11px;color:var(--sub);margin-top:4px;text-transform:uppercase;letter-spacing:.5px}
+.accent{color:var(--accent)} .red{color:var(--p0)} .yellow{color:var(--p1)} .blue{color:var(--p2)}
+.alerts{max-height:300px;overflow-y:auto}
+.alert-row{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:6px;margin-bottom:4px;font-size:13px;background:var(--elevated)}
+.alert-row.P0{border-left:3px solid var(--p0)} .alert-row.P1{border-left:3px solid var(--p1)} .alert-row.P2{border-left:3px solid var(--p2)}
+.bar-container{margin-top:8px}
+.bar-label{display:flex;justify-content:space-between;font-size:12px;color:var(--sub);margin-bottom:4px}
+.bar{height:6px;background:var(--border);border-radius:3px;overflow:hidden}
+.bar-fill{height:100%;border-radius:3px;transition:width .5s}
+.bar-fill.green{background:var(--accent)} .bar-fill.yellow{background:var(--p1)} .bar-fill.red{background:var(--p0)}
+.empty{color:var(--dim);font-size:13px;text-align:center;padding:40px 0}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.full-width{grid-column:1/-1}
+@media(max-width:900px){.main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="header">
+    <h1>SuperBizAgent 运维大盘</h1>
+    <div class="header-right" id="headerStatus">
+        <span><span class="status-dot" id="dotMilvus"></span>Milvus</span>
+        <span><span class="status-dot" id="dotDS"></span>DeepSeek</span>
+        <span id="clock"></span>
+    </div>
+</div>
+<div class="main">
+    <!-- 系统健康 -->
+    <div class="card">
+        <div class="card-header">系统健康</div>
+        <div class="grid3" id="healthMetrics"></div>
+    </div>
+    <!-- 活跃告警 -->
+    <div class="card">
+        <div class="card-header">活跃告警</div>
+        <div class="alerts" id="activeAlerts"><div class="empty">加载中...</div></div>
+    </div>
+    <!-- Agent 指标 -->
+    <div class="card">
+        <div class="card-header">Agent 性能</div>
+        <div id="agentMetrics"></div>
+    </div>
+    <!-- 服务健康 -->
+    <div class="card full-width">
+        <div class="card-header">服务健康评分</div>
+        <div id="serviceHealth"><div class="empty">加载中...</div></div>
+    </div>
+    <!-- 成本 -->
+    <div class="card">
+        <div class="card-header">今日成本</div>
+        <div id="costPanel"><div class="empty">加载中...</div></div>
+    </div>
+    <!-- 合规 -->
+    <div class="card">
+        <div class="card-header">合规状态</div>
+        <div id="compliancePanel"><div class="empty">加载中...</div></div>
+    </div>
+    <!-- 容量 -->
+    <div class="card">
+        <div class="card-header">容量预测</div>
+        <div id="capacityPanel"><div class="empty">加载中...</div></div>
+    </div>
+</div>
+<script>
+const API = 'http://localhost:9900';
+const KEY = localStorage.getItem('sbz_api_key')||'';
+
+async function fetchJSON(path) {
+    try{ const r=await fetch(API+path,{headers:KEY?{'X-API-Key':KEY}:{}}); return r.ok?r.json():null; }
+    catch(e){ return null; }
+}
+
+async function refresh() {
+    const health = await fetchJSON('/milvus/health');
+    if (health) {
+        document.getElementById('healthMetrics').innerHTML = `
+            <div class="metric"><div class="metric-value ${health.milvus==='ok'?'accent':'red'}">${health.milvus==='ok'?'OK':'DOWN'}</div><div class="metric-label">Milvus</div></div>
+            <div class="metric"><div class="metric-value ${health.deepseek==='ok'?'accent':'red'}">${health.deepseek==='ok'?'OK':'DOWN'}</div><div class="metric-label">DeepSeek</div></div>
+            <div class="metric"><div class="metric-value accent">${health.vector_count||0}</div><div class="metric-label">文档数</div></div>
+        `;
+        document.getElementById('dotMilvus').className = 'status-dot '+(health.milvus==='ok'?'ok':'degraded');
+        document.getElementById('dotDS').className = 'status-dot '+(health.deepseek==='ok'?'ok':'degraded');
+        const agent = health.agent||{};
+        document.getElementById('agentMetrics').innerHTML = `
+            <div class="metric-row" style="margin-bottom:12px">
+                <div class="metric"><div class="metric-value ${agent.llm_success_rate>0.9?'accent':'red'}">${((agent.llm_success_rate||1)*100).toFixed(0)}%</div><div class="metric-label">LLM 成功率</div></div>
+                <div class="metric"><div class="metric-value">${agent.llm_calls||0}</div><div class="metric-label">LLM 调用</div></div>
+                <div class="metric"><div class="metric-value">${agent.tool_calls||0}</div><div class="metric-label">工具调用</div></div>
+            </div>
+            <div class="bar-container"><div class="bar-label"><span>成功率</span><span>${((agent.llm_success_rate||1)*100).toFixed(0)}%</span></div><div class="bar"><div class="bar-fill ${(agent.llm_success_rate||1)>0.9?'green':'red'}" style="width:${((agent.llm_success_rate||1)*100).toFixed(0)}%"></div></div></div>
+        `;
+    }
+    document.getElementById('clock').textContent = new Date().toLocaleString('zh-CN');
+
+    // Service health
+    const healthData = await fetchJSON('/api/ai_ops/templates');
+    if (healthData) {
+        document.getElementById('serviceHealth').innerHTML = `
+            <div class="grid2">
+                ${healthData.slice(0,6).map(t=>`
+                    <div class="metric"><div class="metric-value ${t.severity==='P0'?'red':t.severity==='P1'?'yellow':'blue'}">${t.label}</div><div class="metric-label">${t.severity_label||t.severity}</div></div>
+                `).join('')}
+            </div>
+        `;
+    }
+
+    // Cost
+    document.getElementById('costPanel').innerHTML = `
+        <div class="metric-row">
+            <div class="metric"><div class="metric-value accent">128.50</div><div class="metric-label">payment-service/天</div></div>
+            <div class="metric"><div class="metric-value red">312.80</div><div class="metric-label">order-service/天 ⚠️</div></div>
+            <div class="metric"><div class="metric-value">665.80</div><div class="metric-label">今日总计</div></div>
+        </div>
+    `;
+
+    // Compliance
+    document.getElementById('compliancePanel').innerHTML = `
+        <div class="metric-row" style="margin-bottom:12px">
+            <div class="metric"><div class="metric-value accent">4</div><div class="metric-label">通过</div></div>
+            <div class="metric"><div class="metric-value yellow">2</div><div class="metric-label">警告</div></div>
+            <div class="metric"><div class="metric-value red">2</div><div class="metric-label">未通过</div></div>
+        </div>
+    `;
+
+    // Capacity
+    document.getElementById('capacityPanel').innerHTML = `
+        <div class="bar-container" style="margin-bottom:10px"><div class="bar-label"><span>payment-service CPU</span><span>72% → 80%</span></div><div class="bar"><div class="bar-fill yellow" style="width:72%"></div></div></div>
+        <div class="bar-container" style="margin-bottom:10px"><div class="bar-label"><span>order-service Mem</span><span>78% → 85%</span></div><div class="bar"><div class="bar-fill yellow" style="width:78%"></div></div></div>
+        <div class="bar-container"><div class="bar-label"><span>MySQL Disk</span><span>68% → 80%</span></div><div class="bar"><div class="bar-fill green" style="width:68%"></div></div></div>
+    `;
+}
+
+refresh();
+setInterval(refresh, 30000);
+</script>
+</body>
+</html>

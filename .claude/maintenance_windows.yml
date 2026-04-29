@@ -1,0 +1,8 @@
+# Maintenance windows — alerts matching these rules will be suppressed
+# Format: unix timestamps or date strings for start/end
+windows:
+  - start: 0
+    end: 0
+    services: []
+    alerts: []
+    reason: "example window (disabled — set start/end to activate)"

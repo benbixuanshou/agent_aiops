@@ -8,26 +8,20 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from app.rag.intent import IntentGateway, IntentType
 from app.skills.loader import SkillLoader
 
-SUPERVISOR_PROMPT = """你是路由 Supervisor。根据用户问题，决定如何处理:
+SUPERVISOR_PROMPT = """你是路由 Supervisor。根据用户问题，决定分配给哪个 Agent:
 
 ## 决策规则
 
-1. **技术问答** — 概念解释、配置查询、产品咨询、原理问题
-   → 直接路由到 rag_agent（知识库检索）
-   示例: "Redis 怎么配置持久化"、"Docker 和 K8s 有什么区别"
-
-2. **故障排查** — 告警分析、日志查询、性能诊断、异常排查
-   → 路由到 sre_agent（全工具排查 + 报告）
-   示例: "CPU 飙到 92% 帮我排查"、"order-service 报错了查一下"
-
-3. **混合需求** — 既有问答又有排查，或不确定
-   → 先 rag_agent 查原理，根据结果决定是否需要 sre_agent 深入
-   示例: "CPU 高了是什么原因，帮我查日志"
+1. **技术问答** — 概念解释、配置、原理 → rag_agent
+2. **故障排查** — 告警、日志、性能诊断 → sre_agent
+3. **基础设施诊断** — Pod 异常、K8s 事件、网络问题 → platform_agent
+4. **止损操作建议** — 重启、扩容、降级 → action_agent (只建议，不执行)
+5. **不确定/混合** → rag_then_sre
 
 ## 输出格式
 
-只输出一个 JSON：
-{"target": "rag"|"sre"|"rag_then_sre", "reason": "一句话理由", "refined_query": "可能需要改写的问题"}
+只输出一个 JSON:
+{"target": "rag"|"sre"|"platform"|"action"|"rag_then_sre", "reason": "一句话理由"}
 
 不要输出其他内容，不要调用工具。
 """
@@ -51,10 +45,12 @@ class Supervisor:
       bloating the system prompt.
     """
 
-    def __init__(self, llm, rag_agent, sre_agent):
+    def __init__(self, llm, rag_agent, sre_agent, platform_agent=None, action_agent=None):
         self.llm = llm
         self.rag_agent = rag_agent
         self.sre_agent = sre_agent
+        self.platform_agent = platform_agent
+        self.action_agent = action_agent
         self.gateway = IntentGateway()
         self.skill_loader = SkillLoader()
 
@@ -92,7 +88,7 @@ class Supervisor:
             if match:
                 decision = json.loads(match.group())
                 target = decision.get("target", "rag")
-                if target in ("rag", "sre", "rag_then_sre"):
+                if target in ("rag", "sre", "rag_then_sre", "platform", "action"):
                     return {"target": target, "reason": decision.get("reason", "LLM routing")}
         except Exception:
             pass
@@ -131,6 +127,10 @@ class Supervisor:
             agent = self.rag_agent
         elif decision["target"] == "sre":
             agent = self.sre_agent
+        elif decision["target"] == "platform" and self.platform_agent:
+            agent = self.platform_agent
+        elif decision["target"] == "action" and self.action_agent:
+            agent = self.action_agent
         else:  # rag_then_sre
             result = await self.rag_agent.ainvoke({
                 "messages": [{"role": "user", "content": query}]

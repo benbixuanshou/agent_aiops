@@ -103,21 +103,47 @@ async def lifespan(app: FastAPI):
     )
     app.state.sre_agent = build_sre_agent(sre_llm, gather_sre_tools())
 
-    # Supervisor — routes between RAG Agent and SRE Agent
+    # Platform Agent — K8s/DB/infra diagnostics (T=0.3)
+    from app.agent.agents.platform_agent import build_platform_agent
+    from app.tools.k8s_tools import query_k8s_events
+    from app.tools.change_tools import query_recent_deployments
+    from app.tools.prometheus_tool import query_prometheus_alerts as prom_tool_fn
+    platform_tools = gather_rag_tools() + [
+        prom_tool_fn, query_k8s_events, query_recent_deployments
+    ]
+    platform_llm = ChatOpenAI(
+        model=settings.deepseek_model, api_key=settings.deepseek_api_key,
+        base_url=settings.deepseek_base_url, temperature=0.3, max_tokens=4000,
+    )
+    app.state.platform_agent = build_platform_agent(platform_llm, platform_tools)
+
+    # Action Agent — controlled auto-remediation (T=0.1)
+    from app.agent.agents.action_agent import build_action_agent
+    action_llm = ChatOpenAI(
+        model=settings.deepseek_model, api_key=settings.deepseek_api_key,
+        base_url=settings.deepseek_base_url, temperature=0.1, max_tokens=2000,
+    )
+    app.state.action_agent = build_action_agent(action_llm, [])
+
+    # Notify Agent — notification delivery + escalation (background worker)
+    from app.agent.agents.notify_agent import notify_agent as notify_agt
+    app.state.notify_agent = notify_agt
+    await notify_agt.start()
+
+    # Supervisor — routes between all 5 Agents
     from app.agent.supervisor import Supervisor
     supervisor_llm = ChatOpenAI(
-        model=settings.deepseek_model,
-        api_key=settings.deepseek_api_key,
-        base_url=settings.deepseek_base_url,
-        temperature=0.01,
-        max_tokens=200,
+        model=settings.deepseek_model, api_key=settings.deepseek_api_key,
+        base_url=settings.deepseek_base_url, temperature=0.01, max_tokens=200,
     )
     app.state.supervisor = Supervisor(
         llm=supervisor_llm,
         rag_agent=app.state.rag_agent,
         sre_agent=app.state.sre_agent,
+        platform_agent=app.state.platform_agent,
+        action_agent=app.state.action_agent,
     )
-    logger.info("Supervisor + 2 Agents ready (RAG + SRE)")
+    logger.info("Supervisor + 5 Agents ready (RAG + SRE + Platform + Action + Notify)")
 
     # Patrol agent — scheduled health checks
     from app.agent.agents.patrol_agent import PatrolAgent
