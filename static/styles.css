@@ -318,3 +318,4 @@ html, body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--border-hover); }
+.status-dashboard-link{color:var(--accent);font-size:12px;text-decoration:none;padding:4px 10px;border-radius:4px;border:1px solid var(--accent);transition:all var(--transition);font-weight:500}.status-dashboard-link:hover{background:var(--accent-dim)}
