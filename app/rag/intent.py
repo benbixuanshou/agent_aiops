@@ -29,6 +29,37 @@ class IntentRecognizer:
     """
 
     def __init__(self):
+        # ── 第一层：通用相关性词库（全类别共享） ──
+        # 命中 ≥1 个词 = 放行；全部 0 命中 = 拦截
+        self.relevance_keywords: set[str] = {
+            # 基础设施
+            "服务", "接口", "api", "请求", "调用", "响应", "返回", "http",
+            "服务器", "主机", "节点", "集群", "负载", "代理", "网关",
+            "域名", "dns", "ip", "端口", "防火墙", "路由",
+            # 数据库 & 缓存
+            "数据库", "mysql", "redis", "mongodb", "postgresql", "sql",
+            "索引", "查询", "写入", "事务", "锁", "表", "连接池", "慢查询",
+            "缓存", "消息队列", "kafka", "mq", "rabbitmq",
+            # 容器 & 编排
+            "docker", "k8s", "kubernetes", "pod", "容器", "镜像", "deployment",
+            "namespace", "ingress", "service", "编排",
+            # 监控 & 日志
+            "日志", "监控", "告警", "报警", "指标", "metric", "dashboard",
+            "prometheus", "grafana", "trace", "链路", "采样",
+            # 故障 & 排查
+            "错误", "异常", "故障", "报错", "崩溃", "超时", "失败",
+            "泄漏", "溢出", "oom", "死锁", "重启", "挂掉", "不可用",
+            "恢复", "排查", "修复", "处理", "解决", "怎么办",
+            "cpu", "内存", "磁盘", "网络", "io", "吞吐", "延迟",
+            "5xx", "500", "502", "503", "504", "4xx",
+            # 部署 & 变更
+            "部署", "发布", "上线", "回滚", "配置", "升级", "扩容", "缩容",
+            "变更", "灰度", "版本", "环境",
+            # 开发 & 技术
+            "代码", "编程", "实现", "开发", "架构", "设计", "优化",
+            "线程", "进程", "并发", "异步", "框架", "依赖",
+        }
+
         self.keywords = {
             IntentType.TECHNICAL_QUESTION: [
                 "如何实现", "怎么实现", "技术原理", "原理", "算法",
@@ -150,6 +181,26 @@ class IntentRecognizer:
 
         return min(1.0, score)
 
+    def check_relevance(self, query: str) -> int:
+        """Check whether a query is potentially relevant.
+
+        Returns 0 for truly irrelevant / gibberish, ≥1 for anything that may
+        have a legitimate answer — either via internal KB or web search.
+
+        Logic:
+          1. Exact keyword hit → instant pass
+          2. No keyword hit but ≥ 6 meaningful chars → weak pass (let web_search handle it)
+          3. No keyword hit AND too short → block (gibberish like "asdf")
+        """
+        processed = self._preprocess(query)
+        hits = sum(1 for kw in self.relevance_keywords if kw in processed)
+        if hits > 0:
+            return hits
+        # Natural-language fallback: short random strings get blocked,
+        # but sentences without technical terms still pass (→ web_search).
+        meaningful = len(processed.replace(" ", ""))
+        return 1 if meaningful >= 6 else 0
+
 
 @dataclass
 class AgentConfig:
@@ -159,34 +210,53 @@ class AgentConfig:
     prompt_extension: str = ""
     block: bool = False
     block_reply: Optional[str] = None
+    weak_relevance: bool = False
 
 
 class IntentGateway:
     """
-    Intent recognition gateway.
-    Routes queries to appropriate Agent configurations:
-    - Classifies intent using rule-based recognizer
-    - Selects appropriate tools and prompts per intent type
-    - Blocks clearly irrelevant queries to save LLM calls
+    Intent recognition gateway — two-layer design.
 
-    Block strategy: only block queries with zero keyword matches.
-    A single keyword hit (e.g. "CPU") passes through — the Supervisor
-    or Agent will handle the actual routing. This avoids the common
-    problem of rule systems being too aggressive and blocking real queries.
+    Layer 1 (relevance): generic tech keyword set (~100 terms).
+      - 0 matches → truly irrelevant → block (save LLM cost).
+      - ≥1 matches → pass through.
+
+    Layer 2 (intent): per-category keywords + patterns → intent score.
+      - score > 0.05 → strong relevance → internal KB first, then web.
+      - score ≤ 0.05 → weak relevance → skip internal KB, web_search directly.
     """
 
     def __init__(self, intent_recognizer: "IntentRecognizer" = None):
         self.recognizer = intent_recognizer or IntentRecognizer()
 
     def route(self, query: str) -> AgentConfig:
+        relevance = self.recognizer.check_relevance(query)
+
+        # Layer 1: zero relevance → block
+        if relevance == 0:
+            return AgentConfig(
+                intent=IntentType.GENERAL_QUESTION,
+                block=True,
+                block_reply=(
+                    "我是运维助手，暂时无法回答这个问题。你可以尝试用运维相关的关键词描述问题，比如："
+                    "CPU、内存、数据库、Docker、K8s、接口报错等服务相关的术语"
+                ),
+            )
+
         intent_result = self.recognizer.recognize(query)
 
-        # Only block queries with zero keyword matches (truly irrelevant)
-        if intent_result.confidence <= 0.0:
+        # Layer 2: intent score determines strategy
+        weak = intent_result.confidence < settings.intent_confidence_threshold
+
+        if weak:
             return AgentConfig(
-                intent=intent_result.intent,
-                block=True,
-                block_reply="我是运维助手，只能回答运维和技术相关的问题。请尝试描述您遇到的技术问题。",
+                intent=IntentType.GENERAL_QUESTION,
+                weak_relevance=True,
+                prompt_extension=(
+                    "【注意】这个问题与运维的直接关联度较低，内部知识库大概率没有答案。"
+                    "请跳过 search_knowledge_base，直接调用 web_search 进行联网搜索。"
+                    "找到结果后，清晰标注：「此答案来自网络搜索，内部知识库未收录，仅供参考。」"
+                ),
             )
 
         configs = {
