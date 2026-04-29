@@ -1,19 +1,20 @@
+"""Rate limiting — pure ASGI middleware."""
+
 import time
 from collections import defaultdict
 
-from fastapi import Request, HTTPException
-from starlette.middleware.base import BaseHTTPMiddleware
+from fastapi import Request
+from fastapi.responses import JSONResponse
 
 from app.config import settings
 
-SKIP_LIMIT_PATHS = {"/docs", "/redoc", "/openapi.json", "/milvus/health", "/metrics"}
-
+SKIP_LIMIT_PATHS = {"/", "/docs", "/redoc", "/openapi.json", "/milvus/health", "/metrics"}
 WINDOW_SECONDS = 60
 
 
-class RateLimitMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app, dispatch=None):
-        super().__init__(app, dispatch)
+class RateLimitMiddleware:
+    def __init__(self, app):
+        self.app = app
         self._memory_store: dict[str, list[float]] = defaultdict(list)
         self._redis = None
         self._init_redis()
@@ -26,36 +27,48 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         except Exception:
             self._redis = None
 
-    def _resolve_key(self, request: Request) -> str:
-        api_key = request.headers.get("X-API-Key", "anonymous")
+    def _resolve_key(self, request: Request) -> str | None:
+        api_key = request.headers.get("X-API-Key", "")
+        if not api_key:
+            return None
         return f"rl:{api_key}"
 
     def _get_limit(self, path: str) -> int:
-        """Chat/AIOps endpoints have tighter limits since they cost LLM calls."""
         if path.startswith("/api/chat") or path.startswith("/api/ai_ops"):
             return settings.rate_limit_chat_per_minute
         return settings.rate_limit_default_per_minute
 
-    async def dispatch(self, request: Request, call_next):
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        request = Request(scope, receive)
         if request.url.path in SKIP_LIMIT_PATHS:
-            return await call_next(request)
+            await self.app(scope, receive, send)
+            return
 
         key = self._resolve_key(request)
-        limit = self._get_limit(request.url.path)
+        if key is None:
+            await self.app(scope, receive, send)
+            return
 
+        limit = self._get_limit(request.url.path)
         if self._redis:
             ok = self._check_redis(key, limit)
         else:
             ok = self._check_memory(key, limit)
 
         if not ok:
-            raise HTTPException(
+            resp = JSONResponse(
                 status_code=429,
-                detail="rate limit exceeded",
+                content={"detail": "rate limit exceeded"},
                 headers={"Retry-After": str(WINDOW_SECONDS)},
             )
+            await resp(scope, receive, send)
+            return
 
-        return await call_next(request)
+        await self.app(scope, receive, send)
 
     def _check_redis(self, key: str, limit: int) -> bool:
         now = time.time()

@@ -3,9 +3,10 @@
 import logging
 import time
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from app.middleware.auth import get_tenant_context
 from app.session.manager import session_store
 
 logger = logging.getLogger("superbizagent")
@@ -19,11 +20,11 @@ class ConfirmRequest(BaseModel):
 
 @router.post("/knowledge/confirm")
 async def confirm_knowledge(request: Request, req: ConfirmRequest):
-    """Confirm an AIOps finding and store it as a knowledge base entry.
+    """Confirm an AIOps finding and store it as a knowledge base entry."""
+    ctx = get_tenant_context(request)
+    if ctx and ctx.role == "viewer":
+        raise HTTPException(status_code=403, detail="write access required")
 
-    Called when a user in IM replies "confirm" to an Agent report.
-    The finding is retrieved from the tool cache, formatted, and indexed into Milvus.
-    """
     result = await session_store.get_tool_result(req.cache_key)
     if not result:
         return {"status": "not_found", "detail": "cache key expired or invalid"}

@@ -3,10 +3,17 @@ import json
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse, JSONResponse
 
+from app.middleware.auth import get_tenant_context
 from app.models.schemas import ChatRequest, ApiResponse, ChatResponse, SseMessage
 from app.session.manager import session_store
 
 router = APIRouter(tags=["chat"])
+
+
+def _scoped_sid(request: Request, raw: str) -> str:
+    ctx = get_tenant_context(request)
+    raw = raw or ""
+    return f"{ctx.tenant_id}:{raw}" if raw else ""
 
 
 @router.post("/chat")
@@ -16,7 +23,7 @@ async def chat(request: Request, req: ChatRequest):
             content=ApiResponse(code=400, message="Question cannot be empty").model_dump()
         )
 
-    session = await session_store.get_or_create(req.Id)
+    session = await session_store.get_or_create(_scoped_sid(request, req.Id))
     history = await session.get_history()
 
     supervisor = request.app.state.supervisor
@@ -35,7 +42,7 @@ async def chat_stream(request: Request, req: ChatRequest):
             media_type="text/event-stream",
         )
 
-    session = await session_store.get_or_create(req.Id)
+    session = await session_store.get_or_create(_scoped_sid(request, req.Id))
     history = await session.get_history()
 
     supervisor = request.app.state.supervisor

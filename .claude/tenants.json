@@ -1,0 +1,19 @@
+{
+  "tenants": [
+    {
+      "id": "team-a",
+      "name": "Team A",
+      "keys": [
+        {"key": "sk-team-a-admin", "role": "admin"},
+        {"key": "sk-team-a-operator", "role": "operator"}
+      ]
+    },
+    {
+      "id": "team-b",
+      "name": "Team B",
+      "keys": [
+        {"key": "sk-team-b-admin", "role": "admin"}
+      ]
+    }
+  ]
+}

@@ -151,24 +151,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# P0 middleware (ordered: outermost first)
-from app.middleware.error_handler import ErrorHandlerMiddleware
+# P0 middleware (pure ASGI, applied in order: outermost → innermost)
 from app.middleware.logging import LoggingMiddleware
 from app.middleware.auth import ApiKeyMiddleware
 from app.middleware.rate_limit import RateLimitMiddleware
-app.add_middleware(ErrorHandlerMiddleware)
 app.add_middleware(LoggingMiddleware)
 app.add_middleware(ApiKeyMiddleware)
 app.add_middleware(RateLimitMiddleware)
 
 # Import and include routers
-from app.api import chat, aiops, upload, health, session, knowledge, metrics
+from app.api import chat, aiops, upload, health, session, knowledge, metrics, admin
 app.include_router(chat.router, prefix="/api")
 app.include_router(aiops.router, prefix="/api")
 app.include_router(upload.router, prefix="/api")
 app.include_router(health.router)
 app.include_router(session.router, prefix="/api/chat")
 app.include_router(knowledge.router, prefix="/api")
+app.include_router(admin.router, prefix="/api")
 app.include_router(metrics.router, prefix="")
 
 # Mount static files for the web UI (after API routes)

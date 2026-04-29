@@ -2,12 +2,15 @@
 class SuperBizAgentApp {
     constructor() {
         this.apiBaseUrl = 'http://localhost:9900/api';
-        this.currentMode = 'quick'; // 'quick' 或 'stream'
+        this.currentMode = 'quick';
         this.sessionId = this.generateSessionId();
         this.isStreaming = false;
-        this.currentChatHistory = []; // 当前对话的消息历史
-        this.chatHistories = this.loadChatHistories(); // 所有历史对话
-        this.isCurrentChatFromHistory = false; // 标记当前对话是否是从历史记录加载的
+        this.currentChatHistory = [];
+        this.chatHistories = this.loadChatHistories();
+        this.isCurrentChatFromHistory = false;
+        this.apiKey = localStorage.getItem('sbz_api_key') || '';
+        this.tenantName = localStorage.getItem('sbz_tenant') || '';
+        this.role = localStorage.getItem('sbz_role') || '';
 
         this.initTheme();
         this.initializeElements();
@@ -16,6 +19,99 @@ class SuperBizAgentApp {
         this.initMarkdown();
         this.checkAndSetCentered();
         this.renderChatHistory();
+
+        // Show login if no API key
+        if (!this.apiKey) {
+            this.showLogin();
+        } else {
+            this.hideLogin();
+            this.loadTemplates();
+        }
+    }
+
+    // ═══ Login ═══
+    showLogin() {
+        document.getElementById('loginOverlay').style.display = 'flex';
+    }
+    hideLogin() {
+        document.getElementById('loginOverlay').style.display = 'none';
+        document.getElementById('tenantBadge').textContent = this.tenantName || '默认租户';
+        const adminBtn = document.getElementById('adminBtn');
+        if (adminBtn) adminBtn.style.display = this.role === 'admin' ? 'block' : 'none';
+    }
+    async doLogin() {
+        const key = document.getElementById('loginKeyInput').value.trim();
+        if (!key) return;
+        document.getElementById('loginError').textContent = '';
+        try {
+            const res = await fetch(this.apiBaseUrl + '/admin/tenants', { headers: { 'X-API-Key': key } });
+            if (!res.ok) throw new Error('认证失败，请检查 API Key');
+            const data = await res.json();
+            this.apiKey = key;
+            this.tenantName = data.current_tenant.name;
+            this.role = data.current_tenant.role;
+            localStorage.setItem('sbz_api_key', key);
+            localStorage.setItem('sbz_tenant', this.tenantName);
+            localStorage.setItem('sbz_role', this.role);
+            this.hideLogin();
+            this.loadTemplates();
+        } catch (e) {
+            document.getElementById('loginError').textContent = e.message;
+        }
+    }
+    doLogout() {
+        localStorage.removeItem('sbz_api_key');
+        localStorage.removeItem('sbz_tenant');
+        localStorage.removeItem('sbz_role');
+        this.apiKey = '';
+        this.showLogin();
+    }
+
+    // ═══ API helpers ═══
+    authHeaders() {
+        return this.apiKey ? { 'X-API-Key': this.apiKey } : {};
+    }
+
+    // ═══ Templates loader ═══
+    async loadTemplates() {
+        try {
+            const res = await fetch(this.apiBaseUrl + '/ai_ops/templates', { headers: this.authHeaders() });
+            const templates = await res.json();
+            const container = document.getElementById('taskTemplates');
+            container.innerHTML = '';
+            templates.forEach(t => {
+                const btn = document.createElement('button');
+                btn.className = 'task-template-btn';
+                btn.textContent = t.label + (t.severity === 'P0' ? ' 🔴' : t.severity === 'P1' ? ' 🟡' : '');
+                btn.dataset.template = t.key;
+                btn.addEventListener('click', () => this.runTemplate(t.key));
+                container.appendChild(btn);
+            });
+        } catch (e) { /* silent */ }
+    }
+    async runTemplate(key) {
+        this.showLoading();
+        try {
+            const res = await fetch(this.apiBaseUrl + '/ai_ops/template/' + key, {
+                method: 'POST', headers: { ...this.authHeaders(), 'Content-Type': 'application/json' }
+            });
+            const data = await res.json();
+            this.hideLoading();
+            if (data.answer) this.addMessage('system', data.answer);
+        } catch (e) { this.hideLoading(); }
+    }
+    async loadAdminStats() {
+        try {
+            const res = await fetch(this.apiBaseUrl + '/admin/stats', { headers: this.authHeaders() });
+            if (!res.ok) throw new Error('Forbidden');
+            const data = await res.json();
+            this.addMessage('system',
+                '## 管理面板\n\n' +
+                `**租户数**: ${data.tenants.count} | **Key数**: ${data.tenants.keys}\n\n` +
+                `**LLM 调用**: ${data.agent.llm_calls} | **成功率**: ${(data.agent.llm_success_rate*100).toFixed(1)}%\n\n` +
+                `**工具调用**: ${data.agent.tool_calls} | **失败**: ${data.agent.tool_failures}`
+            );
+        } catch (e) { this.addMessage('system', '仅管理员可查看管理面板'); }
     }
 
     // Dark mode
@@ -263,6 +359,18 @@ class SuperBizAgentApp {
                 if (template) this.triggerTaskTemplate(template);
             });
         });
+
+        // Login / Logout / Admin
+        const loginBtn = document.getElementById('loginBtn');
+        if (loginBtn) loginBtn.addEventListener('click', () => this.doLogin());
+        const loginInput = document.getElementById('loginKeyInput');
+        if (loginInput) loginInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') this.doLogin();
+        });
+        const logoutBtn = document.getElementById('logoutBtn');
+        if (logoutBtn) logoutBtn.addEventListener('click', () => this.doLogout());
+        const adminBtn = document.getElementById('adminBtn');
+        if (adminBtn) adminBtn.addEventListener('click', () => this.loadAdminStats());
     }
 
     async triggerTaskTemplate(templateKey) {
@@ -270,7 +378,7 @@ class SuperBizAgentApp {
         this.messageInput.value = labels[templateKey] || templateKey;
         this.showLoading();
         try {
-            const res = await fetch(`${this.apiBaseUrl}/ai_ops/template/${templateKey}`, {method:'POST'});
+            const res = await fetch(`${this.apiBaseUrl}/ai_ops/template/${templateKey}`, {method:'POST', headers: this.authHeaders()});
             const data = await res.json();
             if (data.answer) {
                 this.addMessage('assistant', data.answer);
@@ -684,6 +792,7 @@ class SuperBizAgentApp {
             const response = await fetch(`${this.apiBaseUrl}/chat`, {
                 method: 'POST',
                 headers: {
+                    ...this.authHeaders(),
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
@@ -740,6 +849,7 @@ class SuperBizAgentApp {
             const response = await fetch(`${this.apiBaseUrl}/chat_stream`, {
                 method: 'POST',
                 headers: {
+                    ...this.authHeaders(),
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
@@ -1181,6 +1291,7 @@ class SuperBizAgentApp {
             const response = await fetch(`${this.apiBaseUrl}/ai_ops`, {
                 method: 'POST',
                 headers: {
+                    ...this.authHeaders(),
                     'Content-Type': 'application/json',
                 }
             });

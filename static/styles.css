@@ -1257,3 +1257,52 @@ body {
     color: #fff;
     border-color: var(--accent);
 }
+
+/* ═══ Login Page ═══ */
+.login-overlay {
+    position: fixed; inset: 0; z-index: 9999;
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+}
+.login-card {
+    background: rgba(255,255,255,0.06);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 16px; padding: 48px 40px; width: 400px; text-align: center;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.login-title { color: #fff; font-size: 24px; margin: 0 0 8px 0; }
+.login-subtitle { color: rgba(255,255,255,0.5); font-size: 14px; margin: 0 0 32px 0; }
+.login-input {
+    width: 100%; box-sizing: border-box;
+    padding: 14px 16px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.2);
+    background: rgba(255,255,255,0.08); color: #fff; font-size: 15px;
+    outline: none; margin-bottom: 16px; transition: border-color 0.2s;
+}
+.login-input:focus { border-color: #4fc3f7; }
+.login-input::placeholder { color: rgba(255,255,255,0.4); }
+.login-btn {
+    width: 100%; padding: 14px; border-radius: 10px; border: none;
+    background: #4fc3f7; color: #1a1a2e; font-size: 16px; font-weight: 600;
+    cursor: pointer; transition: transform 0.15s;
+}
+.login-btn:hover { transform: translateY(-1px); }
+.login-error { color: #ef5350; font-size: 13px; margin-top: 12px; min-height: 20px; }
+.login-hint { color: rgba(255,255,255,0.35); font-size: 12px; margin-top: 20px; }
+
+/* ═══ Tenant Badge + Sidebar Footer ═══ */
+.tenant-badge {
+    font-size: 12px; color: #8e8ea0; margin-top: 4px;
+    padding: 2px 8px; background: rgba(255,255,255,0.1); border-radius: 8px;
+    display: inline-block;
+}
+.sidebar-footer {
+    margin-top: auto; padding: 12px 16px; display: flex; gap: 8px; flex-direction: column;
+}
+.logout-btn, .admin-btn {
+    padding: 8px 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15);
+    background: rgba(255,255,255,0.05); color: #ccc; cursor: pointer;
+    font-size: 13px; width: 100%; transition: background 0.15s;
+}
+.logout-btn:hover { background: rgba(239,83,80,0.15); }
+.admin-btn:hover { background: rgba(79,195,247,0.15); }
