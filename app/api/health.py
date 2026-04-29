@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Request
 
+from app.config import settings
 from app.self_monitor import agent_metrics
 
 router = APIRouter(tags=["health"])
@@ -7,7 +8,7 @@ router = APIRouter(tags=["health"])
 
 @router.get("/milvus/health")
 async def milvus_health(request: Request):
-    status = {"milvus": "unknown", "deepseek": "unknown", "collection": "biz"}
+    status = {"milvus": "unknown", "deepseek": "unknown", "collection": "biz", "cluster": settings.cluster_id}
 
     # Milvus
     try:

@@ -1,7 +1,9 @@
 """Change correlation analysis — detect if recent deployments caused the incident."""
 
 import logging
+from datetime import datetime, timedelta, timezone
 
+import httpx
 from langchain_core.tools import tool
 
 from app.config import settings
@@ -43,6 +45,31 @@ def query_recent_deployments(service: str = "", hours: int = 6) -> str:
     """
     if not settings.change_tracking_enabled:
         return "变更追踪未启用。设置 CHANGE_TRACKING_ENABLED=true 开启。"
+
+    # Try real GitLab API
+    if not settings.change_tracking_mock and settings.gitlab_api_url and settings.gitlab_api_token:
+        try:
+            since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+            gitlab_url = f"{settings.gitlab_api_url}/api/v4/events"
+            params = {"after": since, "per_page": 20, "action": "pushed"}
+            headers = {"PRIVATE-TOKEN": settings.gitlab_api_token}
+            resp = httpx.get(gitlab_url, params=params, headers=headers, timeout=10)
+            resp.raise_for_status()
+            events = resp.json()
+            if not events:
+                return f"最近 {hours} 小时内没有 GitLab 推送事件"
+
+            lines = [f"最近 {hours} 小时内的 GitLab 变更:\n"]
+            for ev in events[:10]:
+                author = ev.get("author", {}).get("name", "unknown")
+                ts = ev.get("created_at", "")
+                msg = ev.get("push_data", {}).get("commit_title", "") or ev.get("action_name", "")
+                project = ev.get("project", {}).get("name", "")
+                lines.append(f"  {project} by {author} at {ts}\n    {msg}\n")
+            lines.append("\n提示: 如果告警时间与某次变更接近，该变更可能是根因。")
+            return "\n".join(lines)
+        except Exception as e:
+            logger.warning("gitlab_api_failed: %s, falling back to mock", e)
 
     deploys = MOCK_DEPLOYMENTS if settings.change_tracking_mock else []
     if service:

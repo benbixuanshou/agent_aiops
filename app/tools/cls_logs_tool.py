@@ -3,6 +3,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional
 from langchain.tools import tool
 
+import httpx
 from app.config import settings
 
 SHANGHAI_TZ = timezone(timedelta(hours=8))
@@ -201,7 +202,40 @@ def query_logs(
     4) 'system-events' - System event logs (Pod restart, OOM Kill, container crash)
     """
     if not settings.cls_mock_enabled:
-        return json.dumps({"success": False, "message": "CLS 真实查询尚未实现"}, ensure_ascii=False)
+        # Try real Elasticsearch / Loki
+        if settings.elasticsearch_url:
+            try:
+                es_url = f"{settings.elasticsearch_url}/{log_topic}/_search"
+                body = {"query": {"match": {"message": query or "*"}}, "size": min(limit, 100)}
+                resp = httpx.post(es_url, json=body, timeout=10)
+                resp.raise_for_status()
+                hits = resp.json().get("hits", {}).get("hits", [])
+                logs = [{
+                    "timestamp": h["_source"].get("@timestamp", ""),
+                    "level": h["_source"].get("level", "INFO"),
+                    "service": h["_source"].get("service", ""),
+                    "message": h["_source"].get("message", ""),
+                } for h in hits]
+                return json.dumps({"success": True, "source": "elasticsearch", "logs": logs, "total": len(logs)}, ensure_ascii=False, indent=2)
+            except Exception as e:
+                logger.warning("elasticsearch_query_failed: %s", e)
+
+        if settings.loki_url:
+            try:
+                loki_url = f"{settings.loki_url}/loki/api/v1/query_range"
+                params = {"query": f'{{job=~".*{log_topic}.*"}} |= `{query or ""}`', "limit": min(limit, 100)}
+                resp = httpx.get(loki_url, params=params, timeout=10)
+                resp.raise_for_status()
+                streams = resp.json().get("data", {}).get("result", [])
+                logs = []
+                for s in streams:
+                    for ts, line in s.get("values", []):
+                        logs.append({"timestamp": ts, "message": line})
+                return json.dumps({"success": True, "source": "loki", "logs": logs[:limit], "total": len(logs)}, ensure_ascii=False, indent=2)
+            except Exception as e:
+                logger.warning("loki_query_failed: %s", e)
+
+        return json.dumps({"success": False, "message": "真实日志系统未配置 (elasticsearch_url / loki_url)"}, ensure_ascii=False)
 
     actual_limit = min(max(limit, 1), 100)
     now = datetime.now(SHANGHAI_TZ)

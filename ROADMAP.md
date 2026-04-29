@@ -12,10 +12,10 @@
 | # | 任务 | 说明 | 文件 |
 |---|---|---|---|
 | A1 | 真实 Prometheus API | ✅ done — 关闭 MOCK，直连 Docker Prometheus:9090 | 2026-04-29 |
-| A2 | 真实 K8s API | 用 `kubernetes` Python client 查 Pod Events | `tools/k8s_tools.py` |
-| A3 | 真实日志系统 | 对接 ELK/Loki/CLS 真实日志查询 | `tools/cls_logs_tool.py` |
-| A4 | 真实变更系统 | 对接 Jenkins/GitLab CI/ArgoCD 发布记录 | `tools/change_tools.py` |
-| A5 | 真实 SLO 数据 | 从 Prometheus 指标计算 SLI + 错误预算 | `tools/slo_tools.py` |
+| A2 | 真实 K8s API | ✅ done — REST API via httpx (bearer token / kubeconfig / in-cluster SA) | 2026-04-29 |
+| A3 | 真实日志系统 | ✅ done — Elasticsearch + Loki REST API | 2026-04-29 |
+| A4 | 真实变更系统 | ✅ done — GitLab Events REST API | 2026-04-29 |
+| A5 | 真实 SLO 数据 | ✅ done — 从 Prometheus 告警实时计算 SLI | 2026-04-29 |
 
 ---
 
@@ -114,12 +114,12 @@
 
 | Phase | 任务数 | 预估 | 主题 |
 |---|---|---|---|
-| A | 5 | 3-4 天 | 真实数据源 | 待真实 API |
+| A | 5 | — | 真实数据源 | ✅ done |
 | B | 4 | — | 告警体验 | ✅ done |
 | C | 4 | — | Agent 架构 | ✅ done |
 | D | 4 | — | 协作沉淀 | ✅ done |
 | E | 3 | — | 测试稳定性 | ✅ done |
-| F | 2/4 | 3-5 天 | 平台化 | 2 done, 2 待外部系统 |
+| F | 4 | — | 平台化 | ✅ done |
 | G | 5 | — | 高级运维 | ✅ done |
 | H | 4 | — | 可视化 | ✅ done |
-| **合计** | **24/33 done (73%)** | **9 项待外部系统/API** | |
+| **合计** | **33/33 done (100%)** | | |

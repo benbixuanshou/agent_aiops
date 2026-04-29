@@ -68,6 +68,25 @@ class Settings(BaseSettings):
 
     # K8s Events
     k8s_mock_enabled: bool = True
+    k8s_api_url: str = ""          # e.g. https://k8s-api.example.com
+    k8s_api_token: str = ""        # Bearer token (or use in-cluster SA)
+    k8s_verify_ssl: bool = True
+
+    # External log systems
+    elasticsearch_url: str = ""
+    loki_url: str = ""
+
+    # GitLab CI
+    gitlab_api_url: str = ""
+    gitlab_api_token: str = ""
+
+    # ITSM
+    jira_url: str = ""
+    jira_api_token: str = ""
+    jira_project_key: str = ""
+
+    # Multi-cluster
+    cluster_id: str = "default"    # unique per deployment
 
     # Patrol agent
     patrol_interval_minutes: int = 15  # 0 = disabled

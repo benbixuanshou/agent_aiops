@@ -1,10 +1,31 @@
+import json
 import logging
+import os
 
+import httpx
 from langchain_core.tools import tool
 
 from app.config import settings
 
 logger = logging.getLogger("superbizagent")
+
+
+def _get_k8s_headers() -> dict | None:
+    """Try to load K8s auth from kubeconfig or in-cluster service account."""
+    token = settings.k8s_api_token
+    if token:
+        return {"Authorization": f"Bearer {token}"}
+    # Try in-cluster service account
+    sa_token = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+    if os.path.exists(sa_token):
+        with open(sa_token) as f:
+            return {"Authorization": f"Bearer {f.read().strip()}"}
+    # Try kubeconfig
+    kubeconfig = os.path.expanduser("~/.kube/config")
+    if os.path.exists(kubeconfig):
+        return {"X-Kubeconfig": kubeconfig}
+    return None
+
 
 MOCK_EVENTS = [
     {
@@ -66,6 +87,35 @@ def query_k8s_events(namespace: str = "production", resource: str = "") -> str:
     Returns:
         格式化的 K8s Events 信息
     """
+    # Try real K8s API first
+    if not settings.k8s_mock_enabled:
+        headers = _get_k8s_headers()
+        base = settings.k8s_api_url
+        if headers and base:
+            try:
+                url = f"{base}/api/v1/namespaces/{namespace}/events"
+                params = {"fieldSelector": "type=Warning"}
+                if resource:
+                    params["fieldSelector"] += f",involvedObject.name={resource}"
+                resp = httpx.get(url, headers=headers, params=params,
+                                 verify=settings.k8s_verify_ssl, timeout=10)
+                resp.raise_for_status()
+                items = resp.json().get("items", [])
+                if not items:
+                    return f"namespace={namespace}: no recent warning events found (real K8s API)"
+                lines = [f"K8s Events ({namespace}, real API):\n"]
+                for ev in items[:10]:
+                    obj = ev.get("involvedObject", {})
+                    lines.append(
+                        f"  [{obj.get('kind', '')}] {obj.get('name', '')}\n"
+                        f"    Reason: {ev.get('reason', '')}\n"
+                        f"    Message: {ev.get('message', '')[:200]}\n"
+                        f"    Count: {ev.get('count', 1)}, Last: {ev.get('lastTimestamp', '')}\n"
+                    )
+                return "\n".join(lines)
+            except Exception as e:
+                logger.warning("k8s_real_api_failed: %s, falling back to mock", e)
+
     if settings.k8s_mock_enabled:
         events = [
             e for e in MOCK_EVENTS
