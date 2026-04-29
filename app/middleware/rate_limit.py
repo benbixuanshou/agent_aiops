@@ -9,6 +9,15 @@ from fastapi.responses import JSONResponse
 from app.config import settings
 
 SKIP_LIMIT_PATHS = {"/", "/docs", "/redoc", "/openapi.json", "/milvus/health", "/metrics"}
+
+STATIC_EXTENSIONS = {".js", ".css", ".html", ".ico", ".svg", ".png", ".jpg", ".woff2", ".map"}
+
+def _should_skip(path: str) -> bool:
+    if path in SKIP_LIMIT_PATHS:
+        return True
+    import os
+    _, ext = os.path.splitext(path)
+    return ext.lower() in STATIC_EXTENSIONS
 WINDOW_SECONDS = 60
 
 
@@ -44,7 +53,7 @@ class RateLimitMiddleware:
             return
 
         request = Request(scope, receive)
-        if request.url.path in SKIP_LIMIT_PATHS:
+        if _should_skip(request.url.path):
             await self.app(scope, receive, send)
             return
 

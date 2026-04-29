@@ -8,6 +8,15 @@ from app.tenant_store import tenant_registry, TenantContext, DEFAULT_TENANT_ID
 
 SKIP_AUTH_PATHS = {"/", "/docs", "/redoc", "/openapi.json", "/milvus/health", "/metrics"}
 
+STATIC_EXTENSIONS = {".js", ".css", ".html", ".ico", ".svg", ".png", ".jpg", ".woff2", ".map"}
+
+def _should_skip(path: str) -> bool:
+    if path in SKIP_AUTH_PATHS:
+        return True
+    import os
+    _, ext = os.path.splitext(path)
+    return ext.lower() in STATIC_EXTENSIONS
+
 
 def _parse_keys(raw: str) -> set[str]:
     return {k.strip() for k in raw.split(",") if k.strip()}
@@ -32,7 +41,7 @@ class ApiKeyMiddleware:
         request = Request(scope, receive)
         request.state.tenant = ANON
 
-        if request.url.path in SKIP_AUTH_PATHS:
+        if _should_skip(request.url.path):
             await self.app(scope, receive, send)
             return
 
