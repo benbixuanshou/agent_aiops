@@ -49,8 +49,8 @@
         <div class="status-indicator"><span class="status-dot blue"></span><span id="statusSuccessRate">100%</span></div>
     </div>
     <div class="status-right">
-        <a href="/dashboard.html" target="_blank" class="status-dashboard-link" title="实时运维大盘">▣ 大盘</a>
-        <a href="/runbook-editor.html" target="_blank" class="status-dashboard-link" title="Runbook 编排">▩ Runbook</a>
+        <a href="#" onclick="switchTab('dashboard');return false" class="status-dashboard-link">▣ 大盘</a>
+        <a href="#" onclick="switchTab('runbook');return false" class="status-dashboard-link">▩ Runbook</a>
         <span class="status-tenant" id="statusTenant">默认租户</span>
         <button class="status-logout" id="statusLogout" title="退出">⇥</button>
     </div>
@@ -72,6 +72,14 @@
             <button class="sidebar-item" data-tab="knowledge">
                 <svg viewBox="0 0 24 24" fill="none"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
                 <span>知识库</span>
+            </button>
+            <button class="sidebar-item" data-tab="dashboard">
+                <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="14" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="3" y="14" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.5"/><rect x="14" y="14" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.5"/></svg>
+                <span>运维大盘</span>
+            </button>
+            <button class="sidebar-item" data-tab="runbook">
+                <svg viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" stroke-width="1.5"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                <span>Runbook</span>
             </button>
             <button class="sidebar-item" data-tab="admin" id="adminTabBtn" style="display:none">
                 <svg viewBox="0 0 24 24" fill="none"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" stroke="currentColor" stroke-width="1.5"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" stroke-width="1.5"/></svg>
@@ -195,6 +203,43 @@
                 <div class="metric-card">
                     <div class="metric-label">告警风暴</div>
                     <div class="metric-value" id="adminAlertStorm">—</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- DASHBOARD TAB -->
+        <div class="tab-panel" id="tab-dashboard">
+            <div class="panel-header">
+                <h3>运维大盘</h3>
+                <p>系统健康、告警状态、Agent 指标、成本合规一览</p>
+            </div>
+            <div class="dashboard-grid" id="dashboardGrid">
+                <div class="empty">加载中...</div>
+            </div>
+        </div>
+
+        <!-- RUNBOOK TAB -->
+        <div class="tab-panel" id="tab-runbook">
+            <div class="panel-header">
+                <h3>Runbook 编排器</h3>
+                <p>拖放节点编排排查流程，实时预览 YAML，一键导出</p>
+            </div>
+            <div style="display:flex;padding:0 36px 36px;gap:16px;flex:1;overflow:hidden">
+                <div class="runbook-palette" style="width:200px;flex-shrink:0">
+                    <div class="sidebar-section-label">节点类型</div>
+                    <div class="rb-node" draggable="true" data-rbtype="tool_call" style="padding:10px 14px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:grab;font-size:13px">Tool Call</div>
+                    <div class="rb-node" draggable="true" data-rbtype="llm_think" style="padding:10px 14px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:grab;font-size:13px">LLM Think</div>
+                    <div class="rb-node" draggable="true" data-rbtype="human_approval" style="padding:10px 14px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:grab;font-size:13px">Human Approval</div>
+                    <div class="rb-node" draggable="true" data-rbtype="notify" style="padding:10px 14px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:grab;font-size:13px">Notify</div>
+                </div>
+                <div id="rbCanvas" style="flex:1;min-height:300px;border:1px dashed var(--border);border-radius:10px;padding:16px;overflow-y:auto" ondragover="event.preventDefault()" ondrop="rbDrop(event)">
+                    <div class="empty" id="rbEmpty">拖放节点到这里开始编排 Runbook</div>
+                </div>
+                <div style="width:300px;flex-shrink:0">
+                    <div class="sidebar-section-label">YAML 预览</div>
+                    <pre id="rbPreview" style="background:var(--bg-surface);border:1px solid var(--border);border-radius:8px;padding:14px;font-family:var(--mono);font-size:12px;color:var(--sub);white-space:pre-wrap;max-height:400px;overflow-y:auto"></pre>
+                    <button onclick="rbExport()" class="btn-secondary" style="margin-top:10px;width:100%">导出 YAML</button>
+                    <button onclick="rbClear()" class="btn-secondary" style="margin-top:6px;width:100%">清空</button>
                 </div>
             </div>
         </div>
@@ -520,6 +565,78 @@ addChatMessage = function(role, content) {
     origAddChatMessage(role, content);
     if (role === 'assistant') { saveCurrentChat(); renderHistoryList(); }
 };
+
+// ── Tab switching helper ──
+function switchTab(tab) {
+    document.querySelectorAll('.sidebar-item').forEach(b => b.classList.remove('active'));
+    document.querySelector('.sidebar-item[data-tab="' + tab + '"]').classList.add('active');
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('tab-' + tab).classList.add('active');
+    if (tab === 'dashboard') refreshDashboard();
+    if (tab === 'admin') loadAdminStats();
+    if (tab === 'knowledge') refreshStatus();
+}
+
+// ── Dashboard tab ──
+async function refreshDashboard() {
+    const grid = document.getElementById('dashboardGrid');
+    const h = await fetch(window.__SBA.apiBaseUrl + '/milvus/health').then(r=>r.json()).catch(()=>null);
+    if (!h) { grid.innerHTML = '<div class="empty">无法加载</div>'; return; }
+    const a = h.agent || {};
+    grid.innerHTML = `
+        <div class="dash-card"><h4>系统健康</h4>
+            <div class="dash-row">
+                <div class="dash-stat"><div class="dash-stat-val" style="color:${h.milvus==='ok'?'var(--accent)':'var(--p0)'}">${h.milvus==='ok'?'OK':'DOWN'}</div><div class="dash-stat-lbl">Milvus</div></div>
+                <div class="dash-stat"><div class="dash-stat-val" style="color:${h.deepseek==='ok'?'var(--accent)':'var(--p0)'}">${h.deepseek==='ok'?'OK':'DOWN'}</div><div class="dash-stat-lbl">DeepSeek</div></div>
+                <div class="dash-stat"><div class="dash-stat-val accent">${h.vector_count||0}</div><div class="dash-stat-lbl">文档数</div></div>
+            </div>
+        </div>
+        <div class="dash-card"><h4>Agent 性能</h4>
+            <div class="dash-row">
+                <div class="dash-stat"><div class="dash-stat-val" style="color:${(a.llm_success_rate||1)>0.9?'var(--accent)':'var(--p0)'}">${((a.llm_success_rate||1)*100).toFixed(0)}%</div><div class="dash-stat-lbl">LLM 成功率</div></div>
+                <div class="dash-stat"><div class="dash-stat-val">${a.llm_calls||0}</div><div class="dash-stat-lbl">调用次数</div></div>
+                <div class="dash-stat"><div class="dash-stat-val">${a.tool_calls||0}</div><div class="dash-stat-lbl">工具调用</div></div>
+            </div>
+        </div>
+        <div class="dash-card"><h4>集群信息</h4>
+            <div class="dash-row">
+                <div class="dash-stat"><div class="dash-stat-val accent">${h.cluster||'default'}</div><div class="dash-stat-lbl">集群</div></div>
+                <div class="dash-stat"><div class="dash-stat-val">${h.collection||'biz'}</div><div class="dash-stat-lbl">Collection</div></div>
+                <div class="dash-stat"><div class="dash-stat-val" style="color:${a.alert_storm?'var(--p0)':'var(--accent)'}">${a.alert_storm?'⚠️ YES':'Normal'}</div><div class="dash-stat-lbl">告警风暴</div></div>
+            </div>
+        </div>
+    `;
+}
+
+// ── Runbook tab ──
+let rbSteps = [];
+function rbDrop(e) {
+    e.preventDefault();
+    const type = window._rbDragType;
+    if (!type) return;
+    const names = {tool_call:'查询 Prometheus 告警',llm_think:'分析告警信息',human_approval:'确认执行操作',notify:'推送排查结果'};
+    rbSteps.push({type,name:names[type]||type});
+    rbRender();
+}
+function rbRender() {
+    const c = document.getElementById('rbCanvas'), empty = document.getElementById('rbEmpty');
+    if (rbSteps.length === 0) { c.innerHTML = ''; c.appendChild(empty); document.getElementById('rbPreview').textContent = '# 空 Runbook'; return; }
+    let h = '';
+    rbSteps.forEach((s,i) => {
+        h += '<div class="rb-step"><div class="rb-step-num">'+(i+1)+'</div><div><b>'+s.name+'</b><div style="font-size:11px;color:var(--dim)">'+s.type+'</div></div><button class="rb-step-del" onclick="rbSteps.splice('+i+',1);rbRender()">×</button></div>';
+    });
+    c.innerHTML = h;
+    const y = {name:'My Runbook',version:'1.0',severity:'P1',steps:rbSteps.map(s=>({type:s.type,name:s.name,config:{}}))};
+    document.getElementById('rbPreview').textContent = JSON.stringify(y,null,2).replace(/"/g,'').replace(/\{/g,'{').replace(/\}/g,'}').replace(/,/g,'\n').replace(/:/g,': ');
+}
+function rbClear() { rbSteps = []; rbRender(); }
+function rbExport() {
+    if (rbSteps.length === 0) return;
+    const y = {name:'my-runbook',version:'1.0',severity:'P1',steps:rbSteps.map(s=>({type:s.type,name:s.name,config:{}}))};
+    const blob = new Blob([JSON.stringify(y,null,2)],{type:'text/yaml'});
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'runbook.json'; a.click();
+}
+document.querySelectorAll('.rb-node').forEach(n => n.addEventListener('dragstart',e => { window._rbDragType = e.target.dataset.rbtype; }));
 </script>
 </body>
 </html>
