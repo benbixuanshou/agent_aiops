@@ -49,7 +49,7 @@ make down / restart / logs / check / clean / help
 
 | 层 | 技术 |
 |---|---|
-| LLM | DeepSeek (deepseek-chat) |
+| LLM | DeepSeek (deepseek-v4-pro) |
 | 嵌入 | DashScope text-embedding-v4 (1024-dim) |
 | Agent | LangGraph 0.2+ (`create_react_agent`) |
 | 向量库 | Milvus 2.5, COSINE, IVF_FLAT |
