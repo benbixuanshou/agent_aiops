@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 
 from app.config import settings
 
-SKIP_LIMIT_PATHS = {"/", "/docs", "/redoc", "/openapi.json", "/milvus/health", "/metrics"}
+SKIP_LIMIT_PATHS = {"/", "/docs", "/redoc", "/openapi.json", "/milvus/health", "/metrics", "/api/login"}
 
 STATIC_EXTENSIONS = {".js", ".css", ".html", ".ico", ".svg", ".png", ".jpg", ".woff2", ".map"}
 

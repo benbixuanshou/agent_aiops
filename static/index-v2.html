@@ -269,12 +269,15 @@ setInterval(refreshStatus, 30000);
         const errEl = document.getElementById('loginError');
         errEl.textContent = '';
         try {
-            const r = await fetch(window.__SBA.apiBaseUrl + '/api/admin/tenants', { headers: {'X-API-Key': keyInput} });
+            const r = await fetch(window.__SBA.apiBaseUrl + '/api/login', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({api_key: keyInput})
+            });
             if (!r.ok) throw new Error('认证失败，请检查 API Key');
             const data = await r.json();
             window.__SBA.apiKey = keyInput;
-            window.__SBA.tenantName = data.current_tenant.name;
-            window.__SBA.role = data.current_tenant.role;
+            window.__SBA.tenantName = data.tenant.name;
+            window.__SBA.role = data.tenant.role;
             localStorage.setItem('sbz_api_key', keyInput);
             localStorage.setItem('sbz_tenant', window.__SBA.tenantName);
             localStorage.setItem('sbz_role', window.__SBA.role);
