@@ -93,7 +93,7 @@
 | 文件 | `supervisor.py` | `react_agent.py` | `react_agent.py` |
 | LLM | DeepSeek T=0.01 | DeepSeek T=0.7 | DeepSeek T=0.3 |
 | max_tokens | 200 | 2000 | 8000 |
-| 工具数 | 0 | 2 | 5 |
+| 工具数 | 0 | 3 | 9 |
 | 决策空间 | 路由 + 串行 | 是否检索 | 多工具排查 |
 | 输出 | 路由决策 | 技术回答 | Markdown 报告 |
 
@@ -303,11 +303,16 @@ Alertmanager → POST /api/ai_ops/webhook
 POST /api/chat                      Supervisor → Agent → answer
 POST /api/chat_stream               SSE streaming variant
 POST /api/ai_ops                    Supervisor → SRE Agent → SSE(工具+报告)
-GET  /api/ai_ops/templates          任务模板列表
+GET  /api/ai_ops/templates          任务模板列表 (8模板, P0/P1/P2)
 POST /api/ai_ops/template/{key}    按模板运行 AIOps
 POST /api/upload                    上传文件 → IndexingService → Milvus
 POST /api/ai_ops/webhook            Alertmanager webhook → auto SRE Agent
-GET  /milvus/health                 {milvus, deepseek, vector_count}
+POST /api/login                     验证 API Key → 返回租户信息
+POST /api/knowledge/confirm         确认排查结果入库
+GET  /api/admin/stats              全局统计 (admin only)
+GET  /api/admin/tenants            当前租户信息
+GET  /milvus/health                 {milvus, deepseek, vector_count, agent}
+GET  /metrics                       Prometheus 指标
 POST /api/chat/clear                清空会话
 GET  /api/chat/session/{id}         会话信息
 GET  /                              前端界面
@@ -319,26 +324,42 @@ GET  /                              前端界面
 
 ```
 app/
-├── main.py                    # FastAPI lifespan + logging + auto-ingestion
+├── main.py                    # FastAPI lifespan: embed → vector → hybrid → agents → supervisor
 ├── config.py                  # pydantic-settings: DeepSeek + Milvus + MySQL + Redis
+├── tenant_store.py            # API Key → Tenant + Role 映射
+├── self_monitor.py            # Agent 健康指标自监控
 ├── agent/
-│   ├── supervisor.py          # 2-tier routing + skill injection
+│   ├── supervisor.py          # 2-tier routing (rules + LLM), skill injection
 │   ├── react_agent.py         # build_rag_agent() + build_sre_agent()
 │   ├── tools.py               # gather_rag_tools() + gather_sre_tools()
-│   └── task_templates.py      # 4 preset AIOps prompts
+│   ├── task_templates.py      # 8 preset AIOps prompts (P0/P1/P2)
+│   ├── alert_aggregator.py    # 告警聚合引擎
+│   └── agents/
+│       └── patrol_agent.py    # 定时巡检 Agent
 ├── rag/
-│   ├── intent.py              # IntentRecognizer + IntentGateway + AgentConfig
+│   ├── intent.py              # IntentRecognizer(2层) + IntentGateway + AgentConfig
 │   ├── retrieval.py           # MilvusStore (pymilvus direct)
 │   ├── rag_tool.py            # search_knowledge_base @tool (hybrid search)
 │   └── hybrid_search.py       # HybridRetriever (BM25 + Milvus COSINE → RRF)
 ├── tools/
-│   ├── datetime_tool.py       # get_current_datetime (Asia/Shanghai)
+│   ├── datetime_tool.py       # get_current_datetime
 │   ├── prometheus_tool.py     # query_prometheus_alerts (mock/real)
-│   └── cls_logs_tool.py       # query_logs + get_available_log_topics (mock)
-├── skills/loader.py           # .claude/skills/*/SKILL.md → match + inject
+│   ├── cls_logs_tool.py       # query_logs + get_available_log_topics (mock)
+│   ├── k8s_tools.py           # query_k8s_events + get_k8s_namespaces (mock)
+│   ├── change_tools.py        # query_recent_deployments (mock)
+│   ├── slo_tools.py           # query_slo_status
+│   └── web_search_tool.py     # DuckDuckGo 联网搜索
+├── middleware/
+│   ├── auth.py                # API Key 认证 (pure ASGI)
+│   ├── rate_limit.py          # 滑动窗口限流 (Redis + memory fallback)
+│   ├── logging.py             # 结构化日志 + Correlation ID
+│   └── error_handler.py       # 全局异常处理
+├── notify/
+│   └── dingtalk.py            # 钉钉群机器人通知
 ├── session/manager.py         # MySQL/Redis/SQLite + context compression + tool cache
 ├── ingestion/                 # chunker → embedder(DashScope) → indexer
-├── api/                       # chat, aiops, upload, health, session
+├── skills/loader.py           # .claude/skills/*/SKILL.md → match + inject
+├── api/                       # chat, aiops, upload, health, session, metrics, admin, knowledge
 └── models/schemas.py          # Pydantic v2 request/response
 
 tests/
@@ -346,11 +367,22 @@ tests/
 ├── test_intent.py             # 意图识别测试
 ├── test_session.py            # Session 管理测试
 ├── test_imports.py            # 模块导入测试
+├── conftest.py                # 共享 fixtures
+├── agent/test_aggregator.py   # 告警聚合测试
+├── api/test_endpoints.py      # HTTP 端点测试
+├── tools/test_tools.py        # 工具 Mock 测试
 └── eval/                      # RAG 评测 (Recall@5=1.0, MRR=0.933)
 
-.claude/skills/                # 8 个渐进式 Skills
-docker-compose.yml             # Milvus + etcd + minio + attu + MySQL + Redis + Prometheus + Alertmanager + App
-Dockerfile                     # Python 3.12-slim
+.claude/
+├── skills/                    # 7 个渐进式 Skills
+├── tenants.json               # 租户配置
+└── settings.json              # Claude Code 插件配置
+
+Dockerfile                     # 多阶段构建 (builder + runtime)
+docker-compose.yml             # 9 services
+docker-compose.prod.yml        # 生产环境覆盖
+Makefile                       # 开发命令
+alembic/                       # DB 迁移框架
 ```
 
 ## 关键配置

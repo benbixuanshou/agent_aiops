@@ -48,7 +48,7 @@ POST /api/chat ──→ IntentGateway ──→ Supervisor ──→ RAG Agent 
 |---|---|---|---|
 | File | `agent/supervisor.py` | `agent/react_agent.py` | `agent/react_agent.py` |
 | LLM | DeepSeek T=0.01 | DeepSeek T=0.7 | DeepSeek T=0.3 |
-| Tools | 0 (routing only) | `search_knowledge_base`, `get_current_datetime` | above + `query_prometheus_alerts`, `query_logs`, `get_available_log_topics` |
+| Tools | 0 (routing only) | `search_knowledge_base`, `get_current_datetime`, `web_search` | above + `query_prometheus_alerts`, `query_logs`, `query_k8s_events`, `query_recent_deployments`, `query_slo_status` (9 total) |
 | Skills | — | usually none | `log-analyzer`, `alert-triage` matched & injected |
 
 ### Key Components

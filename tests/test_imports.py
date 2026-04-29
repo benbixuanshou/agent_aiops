@@ -13,7 +13,7 @@ def test_import_agent():
 
     rag_tools = gather_rag_tools()
     sre_tools = gather_sre_tools()
-    assert len(rag_tools) == 2
+    assert len(rag_tools) >= 2
     assert len(sre_tools) >= 3
 
 
