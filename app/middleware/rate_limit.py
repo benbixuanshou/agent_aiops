@@ -6,7 +6,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.config import settings
 
-SKIP_LIMIT_PATHS = {"/docs", "/redoc", "/openapi.json", "/milvus/health"}
+SKIP_LIMIT_PATHS = {"/docs", "/redoc", "/openapi.json", "/milvus/health", "/metrics"}
 
 WINDOW_SECONDS = 60
 

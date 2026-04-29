@@ -15,7 +15,7 @@ from app.session.manager import session_store
 
 logger = logging.getLogger("superbizagent")
 
-router = APIRouter()
+router = APIRouter(tags=["aiops"])
 
 
 @router.get("/ai_ops/templates")

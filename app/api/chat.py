@@ -6,7 +6,7 @@ from fastapi.responses import StreamingResponse, JSONResponse
 from app.models.schemas import ChatRequest, ApiResponse, ChatResponse, SseMessage
 from app.session.manager import session_store
 
-router = APIRouter()
+router = APIRouter(tags=["chat"])
 
 
 @router.post("/chat")

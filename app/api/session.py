@@ -3,7 +3,7 @@ from fastapi import APIRouter
 from app.models.schemas import ClearRequest, ApiResponse, SessionInfoResponse
 from app.session.manager import session_store
 
-router = APIRouter()
+router = APIRouter(tags=["session"])
 
 
 @router.post("/clear")

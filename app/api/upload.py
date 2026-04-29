@@ -6,7 +6,7 @@ import os
 from app.config import settings
 from app.models.schemas import ApiResponse, FileUploadResponse
 
-router = APIRouter()
+router = APIRouter(tags=["upload"])
 
 ALLOWED_EXTENSIONS = {ext.strip() for ext in settings.upload_allowed_extensions.split(",")}
 

@@ -86,18 +86,43 @@ tests/                # 核心测试 + RAG 评测
 | `POST /api/chat_stream` | 流式问答 (SSE) |
 | `POST /api/ai_ops` | AIOps 告警排查 (SSE + 工具调用进度) |
 | `POST /api/ai_ops/webhook` | Alertmanager Webhook 自动触发 Agent |
-| `GET /api/ai_ops/templates` | 任务模板列表 (CPU/内存/慢查询/宕机) |
+| `GET /api/ai_ops/templates` | 任务模板列表 (8模板, P0/P1/P2) |
+| `POST /api/knowledge/confirm` | 确认排查结果入库 |
 | `POST /api/upload` | 上传文档自动向量化 |
-| `GET /milvus/health` | 健康检查 |
+| `GET /milvus/health` | 健康检查 (+ Agent 自监控指标) |
+| `GET /metrics` | Prometheus 指标导出 |
+| `GET /docs` | OpenAPI Swagger 文档 |
 | `GET /` | Web 前端 |
+
+## 生产部署
+
+```bash
+# 开发环境
+make init                 # 一键启动 (mock 模式)
+docker compose up -d       # 手动启动
+
+# 生产环境
+cp .env .env.prod  # 编辑生产配置 (APP_ENV=prod, API keys, mock=false)
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+**环境变量说明：**
+
+| 变量 | 说明 | 默认值 |
+|---|---|---|
+| `APP_ENV` | 运行环境 dev/staging/prod | dev |
+| `API_KEYS` | 逗号分隔的 API Key (prod 必填) | 空 (dev 免认证) |
+| `WEBHOOK_SECRET` | Alertmanager HMAC 密钥 | 空 |
+| `DINGTALK_WEBHOOK_URL` | 钉钉群机器人地址 | 空 |
+| `PATROL_INTERVAL_MINUTES` | 巡检间隔分钟数 (0=关闭) | 15 |
+
+详见 [ARCHITECTURE.md](ARCHITECTURE.md) — 完整架构、功能地图、环境变量表
 
 ## 路线图
 
-| 阶段 | 目标 | 核心交付 |
-|---|---|---|
-| **P0** (当前) | 底线安全，可对外开放测试 | API 认证、限流、异常处理、日志系统、CI/CD |
-| **P1** | 功能闭环，团队内部可用 | IM 通知、告警聚合、K8s Events、知识沉淀、定时巡检 |
-| **P2** | 工程化，可对外交付 | 集成测试 70%+、Alembic 迁移、多环境、变更关联 |
-| **P3** | 平台化，可商业交付 | 多租户、审计、ITSM、SLO、War Room、插件市场 |
-
-详见 [ARCHITECTURE.md](ARCHITECTURE.md) — 完整架构、目标 Agent 体系、功能地图
+| 阶段 | 状态 |
+|---|---|
+| **P0** — API 认证、限流、异常处理、日志、CI/CD、Docker 加固 | done |
+| **P1** — IM 通知、告警聚合、K8s Events、巡检、分级 Runbook、知识沉淀 | done |
+| **P2** — 测试、Alembic 迁移、多环境、变更关联、连接池修复 | done |
+| **P3** — 多租户、审计、SLO、自监控、War Room、Runbook、ITSM、Plugin SDK | done |

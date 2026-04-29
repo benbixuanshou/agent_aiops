@@ -2,7 +2,7 @@ from fastapi import APIRouter, Request
 
 from app.self_monitor import agent_metrics
 
-router = APIRouter()
+router = APIRouter(tags=["health"])
 
 
 @router.get("/milvus/health")

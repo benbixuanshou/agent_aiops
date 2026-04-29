@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from app.session.manager import session_store
 
 logger = logging.getLogger("superbizagent")
-router = APIRouter()
+router = APIRouter(tags=["knowledge"])
 
 
 class ConfirmRequest(BaseModel):

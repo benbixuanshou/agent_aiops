@@ -162,13 +162,14 @@ app.add_middleware(ApiKeyMiddleware)
 app.add_middleware(RateLimitMiddleware)
 
 # Import and include routers
-from app.api import chat, aiops, upload, health, session, knowledge
+from app.api import chat, aiops, upload, health, session, knowledge, metrics
 app.include_router(chat.router, prefix="/api")
 app.include_router(aiops.router, prefix="/api")
 app.include_router(upload.router, prefix="/api")
 app.include_router(health.router)
 app.include_router(session.router, prefix="/api/chat")
 app.include_router(knowledge.router, prefix="/api")
+app.include_router(metrics.router, prefix="")
 
 # Mount static files for the web UI (after API routes)
 app.mount("/", StaticFiles(directory="static", html=True), name="static")

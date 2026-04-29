@@ -1,0 +1,50 @@
+version: "3.8"
+
+# Production overrides — use with: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# Sets APP_ENV=prod, disables mock mode, enables resource limits and log rotation.
+
+services:
+  app:
+    environment:
+      - APP_ENV=prod
+      - PROMETHEUS_MOCK_ENABLED=false
+      - CLS_MOCK_ENABLED=false
+      - K8S_MOCK_ENABLED=false
+      - CHANGE_TRACKING_MOCK=false
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+        reservations:
+          memory: 256M
+          cpus: "0.5"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: always
+
+  prometheus:
+    environment:
+      - SCRAPE_APP_TARGET=app:9900
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  mysql:
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  redis:
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"

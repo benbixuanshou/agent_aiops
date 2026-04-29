@@ -3,7 +3,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.config import settings
 
-SKIP_AUTH_PATHS = {"/docs", "/redoc", "/openapi.json", "/milvus/health"}
+SKIP_AUTH_PATHS = {"/docs", "/redoc", "/openapi.json", "/milvus/health", "/metrics"}
 
 
 def _parse_keys(raw: str) -> set[str]:

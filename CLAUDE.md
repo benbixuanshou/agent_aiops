@@ -146,10 +146,10 @@ Supervisor ──→ RAG Agent ────── (tech Q&A, 2 tools)
 ```
 
 **Roadmap phases** (see ARCHITECTURE.md for details):
-- **P0** (next — starting now): API auth, rate limiting, error handling, logging, CI/CD
-- **P1**: IM notify, alert aggregation, K8s Events, knowledge deposition, scheduled patrol
-- **P2**: Integration tests 70%+, Alembic migrations, multi-env config, change correlation
-- **P3**: Multi-tenancy, audit, ITSM, SLO, War Room, Runbook engine, plugin marketplace
+- **P0** (done): API auth, rate limiting, error handling, logging, CI/CD, Docker hardening
+- **P1** (done): IM notify, alert aggregation, K8s Events, knowledge deposition, patrol agent
+- **P2** (done): Integration tests, Alembic migrations, multi-env config, change correlation
+- **P3** (done): Multi-tenancy, audit, SLO, self-monitoring, War Room, Runbook, ITSM, Plugin SDK
 
 ### Key Decisions
 
