@@ -33,7 +33,7 @@ poetry run python tests/eval/evaluator.py # RAG recall/MRR eval
 
 ```
 POST /api/chat ──→ IntentGateway(2层) ──→ Supervisor ──→ RAG Agent(3 tools)
-                                                    SRE Agent(9 tools)
+                                                    SRE Agent(17 tools)
                         ↓
               Layer1: ~100-word relevance check → 0 hits + <6 chars → block
               Layer2: intent score >0.05 → strong(internal KB first), ≤0.05 → weak(web directly)
@@ -41,7 +41,7 @@ POST /api/chat ──→ IntentGateway(2层) ──→ Supervisor ──→ RAG 
               Context auto-compressed after 6 message pairs
 ```
 
-### Three Agents
+### Core Agents (3 ReAct + 4 supporting = 7 total)
 
 | | Supervisor | RAG Agent | SRE Agent |
 |---|---|---|---|
@@ -60,18 +60,28 @@ POST /api/chat ──→ IntentGateway(2层) ──→ Supervisor ──→ RAG 
 - **Self monitor** (`self_monitor.py`): Agent health metrics (LLM success rate, latency, alert storm detection).
 - **Middleware** (pure ASGI): ApiKeyMiddleware, RateLimitMiddleware, LoggingMiddleware. All avoid BaseHTTPMiddleware ExceptionGroup issues.
 
-### Tools
+### Tools (17 total — 10 shared + 7 SRE-only)
 
 | Tool | File | Mode |
 |------|------|------|
 | `search_knowledge_base` | `rag/rag_tool.py` | Hybrid (BM25 + Milvus COSINE) |
-| `web_search` | `tools/web_search_tool.py` | DuckDuckGo (free, no API key) |
-| `query_prometheus_alerts` | `tools/prometheus_tool.py` | Mock / Real |
-| `query_logs` | `tools/cls_logs_tool.py` | Mock (4 topics) |
-| `query_k8s_events` | `tools/k8s_tools.py` | Mock (5 events) |
-| `query_recent_deployments` | `tools/change_tools.py` | Mock (3 deployments) |
-| `query_slo_status` | `tools/slo_tools.py` | Mock (3 services) |
+| `web_search` | `tools/web_search_tool.py` | DuckDuckGo (free) |
 | `get_current_datetime` | `tools/datetime_tool.py` | Asia/Shanghai TZ |
+| `query_prometheus_alerts` | `tools/prometheus_tool.py` | Real (httpx) / Mock |
+| `query_logs` | `tools/cls_logs_tool.py` | Real (ES/Loki) / Mock |
+| `query_k8s_events` | `tools/k8s_tools.py` | Real (REST API) / Mock |
+| `query_recent_deployments` | `tools/change_tools.py` | Real (GitLab API) / Mock |
+| `query_slo_status` | `tools/slo_tools.py` | Real (Prometheus) / Mock |
+| `query_service_topology` | `tools/topology_tools.py` | Mock (6 services) |
+| `query_blast_radius` | `tools/topology_tools.py` | Mock |
+| `score_service_health` | `tools/health_scorer.py` | Mock (4 services, A-D) |
+| `run_compliance_check` | `tools/compliance_tools.py` | Mock (8 checks) |
+| `check_cost_anomaly` | `tools/cost_tools.py` | Mock (6 services) |
+| `predict_capacity` | `tools/capacity_tools.py` | Mock (4 services, 30-day) |
+| `propose_action` | `agent/agents/action_agent.py` | Action Agent only |
+| `get_pending_actions` | `agent/agents/action_agent.py` | Action Agent only |
+| `get_available_log_topics` | `tools/cls_logs_tool.py` | Mock |
+| `get_k8s_namespaces` | `tools/k8s_tools.py` | Mock |
 
 ### Endpoints
 
@@ -87,12 +97,12 @@ POST /api/knowledge/confirm    Confirm finding → index to Milvus
 POST /api/upload               File → IndexingService → Milvus
 GET  /api/admin/stats          Global stats (admin only)
 GET  /api/admin/tenants        Current tenant info
-GET  /milvus/health            {milvus, deepseek, vector_count, agent}
+GET  /milvus/health            {milvus, deepseek, vector_count, agent, cluster}
 GET  /metrics                  Prometheus format
 GET  /docs                     Swagger UI
 POST /api/chat/clear           Clear session
 GET  /api/chat/session/{id}    Session info
-GET  /                          Web UI (dark ops dashboard)
+GET  /                          Web UI (dark ops dashboard + inline tabs)
 ```
 
 ### Project Structure

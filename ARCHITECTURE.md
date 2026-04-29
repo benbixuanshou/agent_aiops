@@ -48,7 +48,7 @@
     │ LLM: DeepSeek            │      │ LLM: DeepSeek            │
     │      T=0.7, 2000tk       │      │      T=0.3, 8000tk       │
     │                          │      │                          │
-    │ Tools (3):               │      │ Tools (9):               │
+    │ Tools (3):               │      │ Tools (17):              │
     │  search_knowledge_base   │      │  search_knowledge_base   │
     │  web_search (DuckDuckGo) │      │  web_search              │
     │  get_current_datetime    │      │  get_current_datetime    │
