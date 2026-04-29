@@ -6,17 +6,20 @@ groups:
         expr: vector(1)
         labels:
           severity: critical
+          service: payment-service
         annotations:
           description: "服务 payment-service CPU 使用率持续超过 80%, 当前值 92%"
       - alert: HighMemoryUsage
         expr: vector(1)
         labels:
           severity: critical
+          service: order-service
         annotations:
           description: "服务 order-service 内存使用率超过 85%, 当前值 91%"
       - alert: SlowResponse
         expr: vector(1)
         labels:
           severity: warning
+          service: user-service
         annotations:
           description: "服务 user-service P99 响应时间超过 3 秒"
