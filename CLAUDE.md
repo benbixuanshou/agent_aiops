@@ -16,28 +16,27 @@ make help              # list all available make targets
 docker compose up -d --build   # alternative to make init
 poetry run uvicorn app.main:app --host 0.0.0.0 --port 9900  # dev (no Docker)
 
-poetry run pytest tests/test_core.py -v   # 10 core tests
+poetry run pytest tests/ -v    # all tests
 poetry run python tests/eval/evaluator.py # RAG recall/MRR eval
-
-find app tests -name "*.py" -exec python -c "import ast; ast.parse(open('{}').read())" \;
 ```
 
 ## Prerequisites
 
-- Docker (app + Milvus + MySQL + Redis + Prometheus + Alertmanager run in containers)
-- `.env` with `DEEPSEEK_API_KEY` (chat LLM) and `DASHSCOPE_API_KEY` (embeddings)
-- Prometheus Mock mode is default (`PROMETHEUS_MOCK_ENABLED=true`)
+- Docker (9 containers: app + Milvus + etcd + minio + Attu + MySQL + Redis + Prometheus + Alertmanager)
+- `.env` with `DEEPSEEK_API_KEY` and `DASHSCOPE_API_KEY`
+- Mock mode is default (`PROMETHEUS_MOCK_ENABLED=true`, `CLS_MOCK_ENABLED=true`, `K8S_MOCK_ENABLED=true`)
 - For local dev: Python 3.11+, Poetry
 
 ## Architecture
 
-**Supervisor + 2 Workers multi-agent, all Docker-contained.**
+**Supervisor + 2 Workers, all Docker-contained.**
 
 ```
-POST /api/chat ──→ IntentGateway ──→ Supervisor ──→ RAG Agent (tech Q&A, 2 tools)
-                                                    SRE Agent (incident response, 5 tools)
+POST /api/chat ──→ IntentGateway(2层) ──→ Supervisor ──→ RAG Agent(3 tools)
+                                                    SRE Agent(9 tools)
                         ↓
-              Zero-keyword queries blocked at gateway (0 LLM cost)
+              Layer1: ~100-word relevance check → 0 hits + <6 chars → block
+              Layer2: intent score >0.05 → strong(internal KB first), ≤0.05 → weak(web directly)
               SRE Agent streamed as SSE with tool-call progress
               Context auto-compressed after 6 message pairs
 ```
@@ -48,115 +47,134 @@ POST /api/chat ──→ IntentGateway ──→ Supervisor ──→ RAG Agent 
 |---|---|---|---|
 | File | `agent/supervisor.py` | `agent/react_agent.py` | `agent/react_agent.py` |
 | LLM | DeepSeek T=0.01 | DeepSeek T=0.7 | DeepSeek T=0.3 |
-| Tools | 0 (routing only) | `search_knowledge_base`, `get_current_datetime`, `web_search` | above + `query_prometheus_alerts`, `query_logs`, `query_k8s_events`, `query_recent_deployments`, `query_slo_status` (9 total) |
-| Skills | — | usually none | `log-analyzer`, `alert-triage` matched & injected |
+| Tools | 0 | `search_knowledge_base`, `get_current_datetime`, `web_search` | above + `query_prometheus_alerts`, `query_logs`, `query_k8s_events`, `query_recent_deployments`, `query_slo_status` |
+| Skills | — | — | `log-analyzer`, `alert-triage` |
 
 ### Key Components
 
-- **IntentGateway** (`rag/intent.py`): Rule-based keyword(0.6)+pattern(0.4), blocks queries with zero keyword matches. Threshold 0.05. 15 troubleshooting keywords.
-- **HybridRetriever** (`rag/hybrid_search.py`): BM25 (rank-bm25) + Milvus COSINE → RRF fusion. Wired into `rag_tool.py`.
-- **SessionStore** (`session/manager.py`): MySQL (Docker) / SQLite (dev) backends. Redis for tool cache (hot path, 5min TTL). Auto-compresses old conversations to summaries via LLM after 6 pairs. 7-day TTL cleanup.
-- **SkillLoader** (`skills/loader.py`): Scans `.claude/skills/*/SKILL.md`, matches by keyword overlap, injects into SRE Agent system prompt. 8 skills installed (5 ops + 3 garden-skills).
-- **Task Templates** (`agent/task_templates.py`): 4 pre-built prompts (CPU/memory/slow/service-down). Exposed at `/api/ai_ops/templates`, frontend buttons at top-right.
-- **Logging**: Python `logging` module, format: `YYYY-MM-DD HH:MM:SS [LEVEL] superbizagent: message`.
+- **IntentGateway** (`rag/intent.py`): Two-layer design. Layer1: ~100 generic tech keywords + 6-char fallback → block truly irrelevant queries. Layer2: per-category keywords(60%) + patterns(40%) → intent score → strong(>0.05, internal KB first) / weak(≤0.05, web directly).
+- **HybridRetriever** (`rag/hybrid_search.py`): BM25 (rank-bm25) + Milvus COSINE → RRF fusion.
+- **SessionStore** (`session/manager.py`): MySQL/SQLite backends with asyncio.Lock. Redis tool cache (5min TTL). Auto-compresses old conversations after 6 pairs. 7-day TTL. MySQL pool_recycle=3600, SQLite WAL mode.
+- **SkillLoader** (`skills/loader.py`): Scans `.claude/skills/*/SKILL.md`, keyword-matched and injected into SRE Agent system prompt. 7 active skills.
+- **Tenant store** (`tenant_store.py`): API Key → Tenant + Role mapping. Configured via `.claude/tenants.json`.
+- **Self monitor** (`self_monitor.py`): Agent health metrics (LLM success rate, latency, alert storm detection).
+- **Middleware** (pure ASGI): ApiKeyMiddleware, RateLimitMiddleware, LoggingMiddleware. All avoid BaseHTTPMiddleware ExceptionGroup issues.
 
 ### Tools
 
 | Tool | File | Mode |
 |------|------|------|
 | `search_knowledge_base` | `rag/rag_tool.py` | Hybrid (BM25 + Milvus COSINE) |
-| `query_prometheus_alerts` | `tools/prometheus_tool.py` | Mock(default) / Real(httpx to Prometheus API) |
-| `query_logs` | `tools/cls_logs_tool.py` | Mock (4 topics: system-metrics, app-logs, db-slow-query, system-events) |
-| `get_available_log_topics` | `tools/cls_logs_tool.py` | Mock |
+| `web_search` | `tools/web_search_tool.py` | DuckDuckGo (free, no API key) |
+| `query_prometheus_alerts` | `tools/prometheus_tool.py` | Mock / Real |
+| `query_logs` | `tools/cls_logs_tool.py` | Mock (4 topics) |
+| `query_k8s_events` | `tools/k8s_tools.py` | Mock (5 events) |
+| `query_recent_deployments` | `tools/change_tools.py` | Mock (3 deployments) |
+| `query_slo_status` | `tools/slo_tools.py` | Mock (3 services) |
 | `get_current_datetime` | `tools/datetime_tool.py` | Asia/Shanghai TZ |
-
-### Vector Store
-
-`rag/retrieval.py` — custom `MilvusStore` wrapping pymilvus directly (langchain-milvus 0.1.x had compatibility issues with pymilvus 2.6). Provides `as_retriever()` and `.col` (pymilvus Collection). `enable_dynamic_field=True`, COSINE metric, IVF_FLAT index, nprobe=10.
 
 ### Endpoints
 
 ```
 POST /api/chat               Supervisor → Agent → answer
-POST /api/chat_stream         SSE streaming variant
-POST /api/ai_ops              Supervisor → SRE Agent → SSE (tools + report)
-GET  /api/ai_ops/templates    List task templates
-POST /api/ai_ops/template/{k} Run specific template
-POST /api/upload              File → IndexingService → Milvus (207 on index fail)
-GET  /milvus/health           {milvus, deepseek, vector_count, collection}
-POST /api/chat/clear          Clear session
-POST /api/ai_ops/webhook       Alertmanager webhook → auto SRE Agent (no-code trigger)
-GET  /api/chat/session/{id}   Session info
-GET  /                         Static frontend (dark mode, drag-drop, Ctrl+Enter)
+POST /api/chat_stream         SSE streaming
+POST /api/ai_ops              SRE Agent → SSE (tools + report)
+POST /api/ai_ops/webhook       Alertmanager → auto SRE Agent
+POST /api/ai_ops/template/{k} Run template (8 available, P0/P1/P2)
+GET  /api/ai_ops/templates    List templates
+POST /api/login                Validate API Key → tenant info
+POST /api/knowledge/confirm    Confirm finding → index to Milvus
+POST /api/upload               File → IndexingService → Milvus
+GET  /api/admin/stats          Global stats (admin only)
+GET  /api/admin/tenants        Current tenant info
+GET  /milvus/health            {milvus, deepseek, vector_count, agent}
+GET  /metrics                  Prometheus format
+GET  /docs                     Swagger UI
+POST /api/chat/clear           Clear session
+GET  /api/chat/session/{id}    Session info
+GET  /                          Web UI (dark ops dashboard)
 ```
-
-### Config (.env / config.py)
-
-- DeepSeek: `deepseek-chat`, base URL `https://api.deepseek.com`
-- DashScope: embeddings `text-embedding-v4` (1024-dim)
-- Milvus: collection `biz`, COSINE, 1024-dim, IVF_FLAT
-- RAG: top-k=3, chunk 800/overlap 100
-- Intent: threshold 0.05, troubleshooting keywords: 错误/异常/故障/报错/排查/CPU/内存/OOM...
-- Prometheus/CLS: mock toggles (default true)
-- Session: MySQL (Docker) / SQLite (dev fallback), Redis tool cache, 6 pairs, 7-day TTL
 
 ### Project Structure
 
 ```
 app/
-├── main.py                    # FastAPI lifespan: embed → vector → hybrid → agents → supervisor
-├── config.py                  # pydantic-settings from .env
+├── main.py                    # FastAPI lifespan + all middleware + patrol start
+├── config.py                  # pydantic-settings: DeepSeek + Milvus + MySQL + Redis
+├── tenant_store.py            # API Key → Tenant + Role mapping
+├── self_monitor.py            # Agent health metrics
 ├── agent/
-│   ├── supervisor.py          # Supervisor: 2-tier routing (rules + LLM), skill injection
+│   ├── supervisor.py          # 2-tier routing (rules + LLM), skill injection
 │   ├── react_agent.py         # build_rag_agent() + build_sre_agent()
-│   ├── tools.py               # gather_rag_tools() + gather_sre_tools()
-│   └── task_templates.py      # 4 preset AIOps task prompts
+│   ├── tools.py               # gather_rag_tools(3) + gather_sre_tools(9)
+│   ├── task_templates.py      # 8 AIOps task prompts (P0/P1/P2)
+│   ├── alert_aggregator.py    # Alert → Incident grouping
+│   └── agents/
+│       └── patrol_agent.py    # Scheduled health checks
 ├── rag/
-│   ├── intent.py              # IntentRecognizer + IntentGateway + AgentConfig
-│   ├── retrieval.py           # MilvusStore + MilvusRetriever (pymilvus direct)
-│   ├── rag_tool.py            # search_knowledge_base @tool (hybrid search)
-│   └── hybrid_search.py       # HybridRetriever (BM25 + vector → RRF)
-├── tools/                     # datetime, prometheus (mock/real), cls_logs (mock)
-├── ingestion/                 # chunker → embedder (DashScope) → indexer
-├── session/manager.py         # MySQL/Redis/SQLite + asyncio.Lock + context compression
-├── skills/loader.py           # .claude/skills/ loader (8 skills)
-├── api/                       # chat, aiops, upload, health, session
-└── models/schemas.py
+│   ├── intent.py              # IntentRecognizer(2-layer) + IntentGateway + AgentConfig
+│   ├── retrieval.py           # MilvusStore + MilvusRetriever (pymilvus)
+│   ├── rag_tool.py            # search_knowledge_base @tool
+│   └── hybrid_search.py       # HybridRetriever (BM25 + COSINE → RRF)
+├── tools/
+│   ├── datetime_tool.py       # get_current_datetime
+│   ├── prometheus_tool.py     # query_prometheus_alerts (mock/real)
+│   ├── cls_logs_tool.py       # query_logs + get_available_log_topics
+│   ├── k8s_tools.py           # query_k8s_events + get_k8s_namespaces
+│   ├── change_tools.py        # query_recent_deployments
+│   ├── slo_tools.py           # query_slo_status
+│   └── web_search_tool.py     # DuckDuckGo web search
+├── middleware/
+│   ├── auth.py                # API Key auth (pure ASGI)
+│   ├── rate_limit.py          # Sliding window (Redis + memory)
+│   ├── logging.py             # Structured logging + X-Request-ID
+│   └── error_handler.py       # Global exception handler
+├── notify/
+│   └── dingtalk.py            # DingTalk group bot
+├── session/manager.py         # MySQL/Redis/SQLite + context compression + tool cache
+├── ingestion/                 # chunker → embedder(DashScope) → indexer
+├── skills/loader.py           # .claude/skills/*/SKILL.md loader (7 skills)
+├── api/
+│   ├── chat.py                # Chat + chat_stream
+│   ├── aiops.py               # AIOps + webhook + templates
+│   ├── admin.py               # Login + admin stats + tenant info
+│   ├── knowledge.py           # Knowledge confirm (RBAC)
+│   ├── metrics.py             # Prometheus /metrics
+│   ├── upload.py              # File upload
+│   ├── health.py              # /milvus/health
+│   └── session.py             # Session clear + info
+└── models/schemas.py          # Pydantic v2 request/response models
+
 tests/
-├── test_core.py               # 10 core tests (intent 6 + session 3 + health 1)
-├── test_intent.py             # intent classification tests
-├── test_session.py            # session lifecycle tests
-├── test_imports.py            # module import verification
-└── eval/                      # 10 annotated queries + evaluator (Recall@5, MRR)
-.claude/skills/                # 8 skills: alert-triage, log-analyzer, report-writer, sql-tuning,
-                              #   capacity-planning, rag-skill, gpt-image-2, web-design-engineer
+├── conftest.py                # Shared fixtures (mock_alerts)
+├── test_core.py               # Intent + session + health (10 tests)
+├── test_intent.py             # Intent classification (6 tests)
+├── test_session.py            # Session lifecycle (5 tests)
+├── test_imports.py            # Import verification (7 tests)
+├── agent/test_aggregator.py   # Alert aggregator (6 tests)
+├── api/test_endpoints.py      # HTTP endpoints (6 tests)
+├── tools/test_tools.py        # Tool mock data (9 tests)
+└── eval/                      # RAG evaluation (10 queries, Recall@5=1.0)
+
+.claude/
+├── skills/                    # 7 skills (5 ops + 2 garden)
+├── tenants.json               # Multi-tenant config
+└── settings.json              # Plugin config
 ```
 
-### Target Architecture (v2.0 Roadmap)
+### Routes & Roadmap
 
-Goal: Split monolithic SRE Agent into Supervisor + 5 domain Agents to avoid tool overload:
-
-```
-Supervisor ──→ RAG Agent ────── (tech Q&A, 2 tools)
-           ├─→ SRE Agent ────── (alert triage, 5 tools)
-           ├─→ Platform Agent ── (K8s/DB/infra, 6-8 tools)
-           ├─→ Patrol Agent ─── (scheduled health checks)
-           ├─→ Action Agent ─── (controlled auto-remediation, human-confirmed)
-           └─→ Notify Agent ─── (DingTalk/WeCom push)
-```
-
-**Roadmap phases** (see ARCHITECTURE.md for details):
 - **P0** (done): API auth, rate limiting, error handling, logging, CI/CD, Docker hardening
-- **P1** (done): IM notify, alert aggregation, K8s Events, knowledge deposition, patrol agent
-- **P2** (done): Integration tests, Alembic migrations, multi-env config, change correlation
-- **P3** (done): Multi-tenancy, audit, SLO, self-monitoring, War Room, Runbook, ITSM, Plugin SDK
+- **P1** (done): IM notify, alert aggregation, K8s Events, patrol, graded runbooks, knowledge deposition
+- **P2** (done): Integration tests, Alembic migrations, multi-env, change correlation, connection pool fix
+- **P3** (done): Multi-tenant + RBAC, SLO, self-monitoring, web search, 2-layer intent routing
 
 ### Key Decisions
 
-- **No langchain-milvus** — replaced with custom pymilvus wrapper (MilvusStore) due to hang on constructor.
-- **No `enable_dynamic_field=False`** — old `metadata_field` approach deprecated, dynamic fields used throughout.
-- **LLM is DeepSeek** via `langchain-openai.ChatOpenAI` with `base_url`. Embeddings still DashScope.
-- **No RAGPipeline** — chat always goes through Supervisor → Agent.
-- **IntentGateway blocks zero-score only** — single keyword match passes through.
-- **Prometheus Mock is default**— real Prometheus available in docker-compose.
-- **Skills are `.claude/skills/<name>/SKILL.md` files** — progressive disclosure, keyword-matched and injected into system prompt.
+- **No langchain-milvus** — custom pymilvus wrapper (MilvusStore) due to hang on constructor.
+- **LLM is DeepSeek** via `langchain-openai.ChatOpenAI`. Embeddings still DashScope.
+- **2-layer intent routing** — relevance keywords filter garbage, intent score decides internal-KB-first vs web-direct.
+- **Pure ASGI middleware** — avoids Starlette BaseHTTPMiddleware ExceptionGroup issues.
+- **Prometheus/CLS/K8s Mock default** — toggle to real in prod via env vars.
+- **Skills are `.claude/skills/<name>/SKILL.md`** — progressive disclosure, keyword-matched, injected into system prompt.
+- **No automatic git push** — commits are manual, push on explicit request only.
